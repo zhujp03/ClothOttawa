@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Log In | Luxury Station</title>
+  <link rel="stylesheet" href="/styles/main.css" />
+</head>
+<body>
+  <div id="site-header"></div>
+  <main class="page-shell">
+    <section class="auth-shell customer-auth-shell">
+      <form class="auth-card" id="customer-login-form">
+        <p class="hero-kicker">CUSTOMER ACCOUNT</p>
+        <h1>Log in to continue</h1>
+        <p id="login-error" class="admin-error" style="display:none;"></p>
+        <p id="login-success" class="admin-success" style="display:none;"></p>
+        <label>Email<input type="email" name="email" autocomplete="email" required /></label>
+        <label>Password<input type="password" name="password" autocomplete="current-password" minlength="8" required /></label>
+        <p class="auth-foot-note"><a href="/account/forgot-password" class="inline-link">Forgot password?</a></p>
+        <button type="submit">Log In</button>
+        <p class="auth-foot-note" id="signup-note">New here? <a href="/account/register" class="inline-link">Sign Up</a></p>
+      </form>
+    </section>
+  </main>
+  <script type="module" src="/scripts/account-login.js"></script>
+</body>
+</html>

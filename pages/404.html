@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>404 | Luxury Station</title>
+  <link rel="stylesheet" href="/styles/main.css" />
+</head>
+<body>
+  <main class="page-shell">
+    <section class="storefront-section">
+      <div class="page-heading-row">
+        <p class="hero-kicker">404</p>
+        <h1 id="not-found-title">Page not found</h1>
+        <p><a id="not-found-back" class="inline-link" href="/">Back to home</a></p>
+      </div>
+    </section>
+  </main>
+  <script>
+    (function () {
+      try {
+        var locale = (localStorage.getItem('nimbus_locale_v1') || 'en').toLowerCase();
+        if (locale === 'fr') {
+          document.documentElement.lang = 'fr';
+          var title = document.querySelector('#not-found-title');
+          var back = document.querySelector('#not-found-back');
+          if (title) title.textContent = 'Page introuvable';
+          if (back) back.textContent = "Retour à l'accueil";
+        } else {
+          document.documentElement.lang = 'en';
+        }
+      } catch {}
+    })();
+  </script>
+</body>
+</html>

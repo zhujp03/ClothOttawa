@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign Up | Luxury Station</title>
+  <link rel="stylesheet" href="/styles/main.css" />
+</head>
+<body>
+  <div id="site-header"></div>
+  <main class="page-shell">
+    <section class="auth-shell customer-auth-shell">
+      <form class="auth-card auth-card-wide" id="customer-register-form">
+        <p class="hero-kicker">CUSTOMER ACCOUNT</p>
+        <h1>Create your account</h1>
+        <p id="register-error" class="admin-error" style="display:none;"></p>
+        <p id="register-success" class="admin-success" style="display:none;"></p>
+        <p class="auth-foot-note" id="register-real-address-note">Address will be used for shipping. Please provide a real address, otherwise your package may not arrive.</p>
+        <div class="form-columns two-col">
+          <label>First Name<input name="firstName" required /></label>
+          <label>Last Name<input name="lastName" required /></label>
+          <label>Email<input type="email" name="email" autocomplete="email" required /></label>
+          <label>Password<input type="password" name="password" autocomplete="new-password" minlength="8" required /></label>
+          <label>Confirm Password<input type="password" name="confirmPassword" autocomplete="new-password" minlength="8" required /></label>
+          <label>Phone<input name="phone" required /></label>
+          <label>Country
+            <select name="country" id="register-country" required>
+              <option value="Canada">Canada (Most popular)</option>
+              <option value="United States">United States</option>
+              <option value="United Kingdom">United Kingdom</option>
+              <option value="France">France</option>
+              <option value="Australia">Australia</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+          <label id="register-country-input-wrap" style="display:none;">Country (Other)
+            <input name="countryManual" id="register-country-input" />
+          </label>
+          <label class="span-2">Address Line 1<input name="addressLine1" required /></label>
+          <label class="span-2">Address Line 2 (Optional)<input name="addressLine2" /></label>
+          <label>City<input name="city" required /></label>
+          <label id="register-province-select-wrap">Province / State
+            <select name="province" id="register-province-select" required></select>
+          </label>
+          <label id="register-province-input-wrap" style="display:none;">Province / State
+            <input name="provinceManual" id="register-province-input" />
+          </label>
+          <label>Postal Code<input name="postalCode" required /></label>
+        </div>
+        <label class="toggle-row terms-check"><input type="checkbox" name="acceptedTerms" /><span>I agree to the Terms & Conditions and privacy policy.</span></label>
+        <button type="submit">Sign Up</button>
+        <p class="auth-foot-note" id="register-login-note">Already have an account? <a href="/account/login" class="inline-link">Log In</a></p>
+      </form>
+    </section>
+  </main>
+  <script type="module" src="/scripts/account-register.js"></script>
+</body>
+</html>

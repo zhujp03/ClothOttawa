@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Email Verification | Luxury Station</title>
+  <link rel="stylesheet" href="/styles/main.css" />
+</head>
+<body>
+  <div id="site-header"></div>
+  <main class="page-shell">
+    <section class="auth-shell customer-auth-shell">
+      <div class="auth-card" id="verify-email-card">
+        <p class="hero-kicker">ACCOUNT SECURITY</p>
+        <h1 id="verify-title">Verifying your email...</h1>
+        <p id="verify-message" class="checkout-subline">Please wait while we verify your link.</p>
+        <p id="verify-error" class="admin-error" style="display:none;"></p>
+        <p id="verify-success" class="admin-success" style="display:none;"></p>
+        <div class="checkout-cta-row" id="verify-actions" style="display:none;">
+          <a href="/account/login" class="cart-view-btn">Log In</a>
+          <a href="/account/register" class="ghost-btn">Sign Up</a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="/scripts/account-verify-email.js"></script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>后台登录 | Luxury Station</title>
+  <link rel="stylesheet" href="/styles/main.css" />
+</head>
+<body>
+  <main class="page-shell">
+    <section class="auth-shell">
+      <form class="auth-card" id="admin-login-form" autocomplete="off">
+        <p class="hero-kicker">后台 CMS</p>
+        <h1>登录后管理商品与订单</h1>
+        <p id="admin-login-error" class="admin-error" style="display:none;"></p>
+        <label>用户名<input type="text" name="username" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required /></label>
+        <label>密码<input type="password" name="password" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" minlength="6" required /></label>
+        <button type="submit">登录</button>
+      </form>
+    </section>
+  </main>
+  <script type="module" src="/scripts/admin-login.js"></script>
+</body>
+</html>

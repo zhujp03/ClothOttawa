@@ -1,0 +1,313 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AdminUser {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  email        String   @unique
+  role         AdminRole @default(ADMIN)
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+enum AdminRole {
+  IVAN
+  ADMIN
+  OWNER
+}
+
+model Category {
+  id        Int        @id @default(autoincrement())
+  name      String
+  nameFr    String?
+  slug      String     @unique
+  parentId  Int?
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Category[] @relation("CategoryTree")
+  products  Product[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([parentId])
+}
+
+model Product {
+  id          Int              @id @default(autoincrement())
+  name        String
+  nameFr      String?
+  slug        String           @unique
+  description String
+  descriptionFr String?
+  priceCents  Int
+  costCents   Int              @default(0)
+  isOnSale    Boolean          @default(false)
+  salePriceCents Int?
+  imageUrl    String?
+  imageUrlsJson String?
+  introPdfUrl String?
+  isActive    Boolean          @default(true)
+  categoryId  Int
+  category    Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  variants    ProductVariant[]
+  orderItems  OrderItem[]
+  orderHistoryItems OrderHistoryItem[]
+  paymentSessionItems PaymentSessionItem[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([categoryId])
+  @@index([isActive])
+}
+
+model ProductVariant {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  color     String
+  size      String
+  stock     Int      @default(0)
+  reservedStock Int  @default(0)
+  sku       String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId, color, size])
+  @@index([productId])
+  @@index([sku])
+}
+
+model CustomerUser {
+  id             Int      @id @default(autoincrement())
+  email          String   @unique
+  isSuspended    Boolean  @default(false)
+  suspendedAt    DateTime?
+  suspendedReason String?
+  emailVerified  Boolean  @default(false)
+  emailVerifiedAt DateTime?
+  emailVerifyTokenHash String?
+  emailVerifyTokenExpiresAt DateTime?
+  passwordHash   String
+  firstName      String
+  lastName       String
+  phone          String
+  phoneHash      String?
+  addressLine1   String
+  addressLine2   String?
+  city           String
+  province       String
+  postalCode     String
+  postalCodeHash String?
+  addressHash    String?
+  country        String   @default("Canada")
+  termsAccepted  Boolean  @default(false)
+  termsAcceptedAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  orders         Order[]
+  orderHistories OrderHistory[]
+  paymentSessions PaymentSession[]
+  contactMessages ContactMessage[]
+
+  @@index([phoneHash])
+  @@index([postalCodeHash])
+  @@index([addressHash])
+  @@index([emailVerifyTokenHash])
+  @@index([isSuspended])
+}
+
+model BlockedEmail {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  reason    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ContactMessage {
+  id         Int          @id @default(autoincrement())
+  customerId Int
+  customer   CustomerUser @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  message    String
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@index([customerId])
+  @@index([createdAt])
+}
+
+model Order {
+  id                 Int          @id @default(autoincrement())
+  orderNumber        String       @unique
+  customerId         Int
+  customer           CustomerUser @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  status             String       @default("PLACED")
+  paymentMethod      PaymentMethod @default(SQUARE)
+  paymentReference   String?
+  subtotalCents      Int
+  totalCents         Int
+  paymentSessionId   Int?         @unique
+  paymentSession     PaymentSession? @relation(fields: [paymentSessionId], references: [id], onDelete: SetNull)
+  shippingName       String
+  shippingPhone      String
+  shippingEmail      String
+  shippingAddress1   String
+  shippingAddress2   String?
+  shippingCity       String
+  shippingProvince   String
+  shippingPostalCode String
+  shippingCountry    String
+  trackingNumber     String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  items              OrderItem[]
+
+  @@index([customerId])
+  @@index([createdAt])
+}
+
+model OrderHistory {
+  id                 Int          @id @default(autoincrement())
+  orderNumber        String       @unique
+  customerId         Int
+  customer           CustomerUser @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  status             String       @default("DELIVERED")
+  paymentMethod      PaymentMethod @default(SQUARE)
+  paymentReference   String?
+  subtotalCents      Int
+  totalCents         Int
+  paymentSessionId   Int?
+  shippingName       String
+  shippingPhone      String
+  shippingEmail      String
+  shippingAddress1   String
+  shippingAddress2   String?
+  shippingCity       String
+  shippingProvince   String
+  shippingPostalCode String
+  shippingCountry    String
+  trackingNumber     String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  items              OrderHistoryItem[]
+
+  @@index([customerId])
+  @@index([createdAt])
+}
+
+model PaymentSession {
+  id               Int                  @id @default(autoincrement())
+  publicToken      String               @unique
+  customerId       Int
+  customer         CustomerUser         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  status           PaymentSessionStatus @default(PENDING)
+  paymentMethod    PaymentMethod        @default(SQUARE)
+  etransferVerificationCents Int        @default(0)
+  subtotalCents    Int
+  totalCents       Int
+  currency         String               @default("CAD")
+  shippingName     String
+  shippingPhone    String
+  shippingEmail    String
+  shippingAddress1 String
+  shippingAddress2 String?
+  shippingCity     String
+  shippingProvince String
+  shippingPostalCode String
+  shippingCountry  String
+  squarePaymentLinkId String?
+  squareOrderId    String?
+  squarePaymentId  String?
+  etransferMatchedAt DateTime?
+  etransferMatchRef String?
+  confirmationEmailSentAt DateTime?
+  checkoutUrl      String?
+  expiresAt        DateTime
+  paidAt           DateTime?
+  order            Order?
+  items            PaymentSessionItem[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([customerId])
+  @@index([status, expiresAt])
+}
+
+model PaymentSessionItem {
+  id               Int            @id @default(autoincrement())
+  paymentSessionId Int
+  paymentSession   PaymentSession @relation(fields: [paymentSessionId], references: [id], onDelete: Cascade)
+  productId        Int
+  product          Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productName      String
+  productSlug      String
+  color            String
+  size             String
+  sku              String?
+  quantity         Int
+  unitPriceCents   Int
+  lineTotalCents   Int
+  createdAt        DateTime       @default(now())
+
+  @@index([paymentSessionId])
+  @@index([productId])
+}
+
+enum PaymentSessionStatus {
+  PENDING
+  PAID
+  EXPIRED
+  CANCELLED
+  FAILED
+}
+
+enum PaymentMethod {
+  SQUARE
+  ETRANSFER
+}
+
+model OrderItem {
+  id             Int      @id @default(autoincrement())
+  orderId        Int
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId      Int
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productName    String
+  productSlug    String
+  color          String
+  size           String
+  sku            String?
+  quantity       Int
+  unitPriceCents Int
+  lineTotalCents Int
+  createdAt      DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model OrderHistoryItem {
+  id             Int          @id @default(autoincrement())
+  orderHistoryId Int
+  orderHistory   OrderHistory @relation(fields: [orderHistoryId], references: [id], onDelete: Cascade)
+  productId      Int
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productName    String
+  productSlug    String
+  color          String
+  size           String
+  sku            String?
+  quantity       Int
+  unitPriceCents Int
+  lineTotalCents Int
+  createdAt      DateTime     @default(now())
+
+  @@index([orderHistoryId])
+  @@index([productId])
+}
