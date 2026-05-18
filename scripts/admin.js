@@ -868,12 +868,14 @@ function bindEvents() {
 
   document.querySelectorAll('[data-delete-category]').forEach((node) => {
     node.addEventListener('click', async () => {
+      setError('');
       if (!confirm('确认删除这个分类？')) return;
       try {
         await request(`/api/categories/${node.dataset.deleteCategory}`, {
           method: 'DELETE',
           headers: headers()
         });
+        setError('');
         await loadAll();
         render();
       } catch (error) {

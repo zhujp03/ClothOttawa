@@ -69,6 +69,30 @@ async function hydrateFrenchNames(rows = []) {
   return output;
 }
 
+async function ensureFallbackCategory(excludeId = null) {
+  const existing = await prisma.category.findFirst({
+    where: {
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+      OR: [{ slug: 'uncategorized' }, { name: 'Uncategorized' }]
+    },
+    orderBy: { id: 'asc' }
+  });
+
+  if (existing) return existing;
+
+  const slug = await uniqueSlug(prisma, 'category', 'uncategorized');
+  const name = 'Uncategorized';
+  const nameFr = await ensureCategoryFrenchName(name, null);
+  return prisma.category.create({
+    data: {
+      name,
+      nameFr,
+      slug,
+      parentId: null
+    }
+  });
+}
+
 router.get('/', async (req, res) => {
   const locale = resolveLocale(req);
   const flat = await prisma.category.findMany({
@@ -210,14 +234,47 @@ router.delete('/:id', requireAdminPermission(ADMIN_PERMISSION.CATALOG), async (r
     return res.status(404).json({ message: 'Category not found' });
   }
 
-  if (category._count.children > 0 || category._count.products > 0) {
-    return res.status(409).json({
-      message: 'Category has child categories or products. Please reassign them before deleting.'
+  const hasReferences = category._count.children > 0 || category._count.products > 0;
+
+  if (!hasReferences) {
+    await prisma.category.delete({ where: { id } });
+    return res.json({
+      deleted: true,
+      movedProducts: 0,
+      detachedChildren: 0
     });
   }
 
-  await prisma.category.delete({ where: { id } });
-  return res.status(204).send();
+  const fallback = await ensureFallbackCategory(id);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const movedProducts = await tx.product.updateMany({
+      where: { categoryId: id },
+      data: { categoryId: fallback.id }
+    });
+
+    const detachedChildren = await tx.category.updateMany({
+      where: { parentId: id },
+      data: { parentId: null }
+    });
+
+    await tx.category.delete({ where: { id } });
+
+    return {
+      movedProducts: movedProducts.count,
+      detachedChildren: detachedChildren.count
+    };
+  });
+
+  return res.json({
+    deleted: true,
+    movedToCategory: {
+      id: fallback.id,
+      name: fallback.name
+    },
+    movedProducts: result.movedProducts,
+    detachedChildren: result.detachedChildren
+  });
 });
 
 export default router;
