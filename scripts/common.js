@@ -1445,11 +1445,16 @@ function openMobileCartView() {
   const cart = document.querySelector('#mobile-nav-cart');
   if (!panel || !main || !sub || !cart) return;
 
+  // Always resync badge/cart state when opening cart view (silent, no reload).
+  syncCartBadges(cartSummary().totalItems);
   renderMobileCartView();
   refreshCartPricing()
     .then(() => {
       const currentPanel = document.querySelector(`#${MOBILE_MENU_PANEL_ID}`);
-      if (currentPanel?.classList.contains('cart-open')) renderMobileCartView();
+      if (currentPanel?.classList.contains('cart-open')) {
+        syncCartBadges(cartSummary().totalItems);
+        renderMobileCartView();
+      }
     })
     .catch(() => {});
   main.setAttribute('aria-hidden', 'true');
@@ -1474,6 +1479,8 @@ function openMobileMenu() {
   const overlay = document.querySelector(`#${MOBILE_MENU_OVERLAY_ID}`);
   const panel = document.querySelector(`#${MOBILE_MENU_PANEL_ID}`);
   if (!overlay || !panel) return;
+  // Guard against stale in-memory state after mobile page restore.
+  syncCartBadges(cartSummary().totalItems);
   resetMobileSubmenu();
   overlay.classList.add('is-open');
   panel.classList.add('is-open');
@@ -1598,6 +1605,22 @@ export async function renderHeader() {
         renderMobileCartView();
       }
     });
+  }
+
+  if (!host.dataset.cartResyncBound) {
+    host.dataset.cartResyncBound = '1';
+    const silentResyncCartUi = () => {
+      syncCartBadges(cartSummary().totalItems);
+      const panel = document.querySelector(`#${MOBILE_MENU_PANEL_ID}`);
+      if (panel?.classList.contains('cart-open')) {
+        renderMobileCartView();
+      }
+    };
+    window.addEventListener('pageshow', silentResyncCartUi);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) silentResyncCartUi();
+    });
+    window.addEventListener('focus', silentResyncCartUi);
   }
 
   const logoutButton = document.querySelector('#logout-btn');
