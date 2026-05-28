@@ -19,6 +19,11 @@ const reorderSchema = z.object({
   direction: z.enum(['previous', 'next'])
 });
 
+const reorderGroupSchema = z.object({
+  parentId: z.coerce.number().int().positive().nullable(),
+  orderedIds: z.array(z.coerce.number().int().positive()).min(1)
+});
+
 function buildTree(items) {
   const map = new Map(items.map((item) => [item.id, { ...item, children: [] }]));
   const roots = [];
@@ -205,6 +210,42 @@ router.put('/:id', requireAdminPermission(ADMIN_PERMISSION.CATALOG), async (req,
 
   const updated = await prisma.category.update({ where: { id }, data });
   return res.json(updated);
+});
+
+router.post('/reorder', requireAdminPermission(ADMIN_PERMISSION.CATALOG), async (req, res) => {
+  const parsed = reorderGroupSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Invalid payload', errors: parsed.error.issues });
+  }
+
+  const { parentId = null, orderedIds } = parsed.data;
+  const siblings = await prisma.category.findMany({
+    where: { parentId },
+    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+    select: { id: true, sortOrder: true }
+  });
+
+  if (siblings.length !== orderedIds.length) {
+    return res.status(400).json({ message: 'Ordered ids do not match sibling count' });
+  }
+
+  const siblingIds = siblings.map((item) => item.id).sort((a, b) => a - b);
+  const submittedIds = [...orderedIds].sort((a, b) => a - b);
+  if (JSON.stringify(siblingIds) !== JSON.stringify(submittedIds)) {
+    return res.status(400).json({ message: 'Ordered ids do not match sibling group' });
+  }
+
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.category.update({
+        where: { id },
+        data: { sortOrder: index }
+      })
+    )
+  );
+
+  return res.json({ reordered: true });
 });
 
 router.post('/:id/reorder', requireAdminPermission(ADMIN_PERMISSION.CATALOG), async (req, res) => {

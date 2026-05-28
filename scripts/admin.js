@@ -72,6 +72,10 @@ function buildTree(items) {
     if (node.parentId && map.has(node.parentId)) map.get(node.parentId).children.push(node);
     else roots.push(node);
   });
+  map.forEach((node) => {
+    node.children.sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || a.id - b.id);
+  });
+  roots.sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || a.id - b.id);
   return roots;
 }
 
@@ -137,6 +141,7 @@ const state = {
 };
 
 let autoRefreshTimer = null;
+let draggedCategoryId = null;
 
 function headers(extra = {}) {
   return { Authorization: `Bearer ${token}`, ...extra };
@@ -225,35 +230,112 @@ async function loadAll() {
   }
 }
 
-function categoryTreeHtml(nodes, depth = 0) {
-  return `<ul class="category-level depth-${depth}">
+function categoryTreeHtml(nodes, depth = 0, parentId = null) {
+  return `<ul class="category-level depth-${depth}" data-category-group="${parentId === null ? 'root' : parentId}" data-parent-id="${
+    parentId === null ? '' : parentId
+  }">
     ${nodes
-      .map((node, index) => {
-        const canMovePrevious = index > 0;
-        const canMoveNext = index < nodes.length - 1;
-        return `
-      <li>
+      .map(
+        (node, index) => `
+      <li class="category-tree-item" data-category-item="${node.id}" draggable="true">
         <div class="category-node-row">
           <div class="category-node-main">
             <span class="category-bullet">${depth === 0 ? '•' : '↳'}</span>
+            <span class="category-sort-badge">${index + 1}</span>
             <span>${node.name}</span>
           </div>
           <div class="category-node-actions">
-            <button class="ghost-btn" type="button" data-move-category="${node.id}" data-direction="previous" ${
-              canMovePrevious ? '' : 'disabled'
-            }>左移</button>
-            <button class="ghost-btn" type="button" data-move-category="${node.id}" data-direction="next" ${
-              canMoveNext ? '' : 'disabled'
-            }>右移</button>
+            <span class="category-drag-handle" title="拖拽排序">::</span>
             <button class="danger-ghost" type="button" data-delete-category="${node.id}">删除</button>
           </div>
         </div>
-        ${node.children?.length ? categoryTreeHtml(node.children, depth + 1) : ''}
+        ${node.children?.length ? categoryTreeHtml(node.children, depth + 1, node.id) : ''}
       </li>
-    `;
-      })
+    `
+      )
       .join('')}
   </ul>`;
+}
+
+async function persistCategoryGroupOrder(group) {
+  const parentAttr = group.getAttribute('data-parent-id');
+  const orderedIds = [...group.children]
+    .map((node) => Number(node.getAttribute('data-category-item') || 0))
+    .filter(Boolean);
+  if (orderedIds.length === 0) return;
+
+  await request('/api/categories/reorder', {
+    method: 'POST',
+    headers: headers({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      parentId: parentAttr ? Number(parentAttr) : null,
+      orderedIds
+    })
+  });
+}
+
+function bindCategoryTreeDnD() {
+  document.querySelectorAll('[data-category-item]').forEach((item) => {
+    item.addEventListener('dragstart', (event) => {
+      draggedCategoryId = Number(item.getAttribute('data-category-item') || 0);
+      item.classList.add('is-dragging');
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', String(draggedCategoryId));
+    });
+
+    item.addEventListener('dragend', () => {
+      draggedCategoryId = null;
+      item.classList.remove('is-dragging');
+      document.querySelectorAll('.category-tree-item.is-drop-target').forEach((node) => node.classList.remove('is-drop-target'));
+    });
+
+    item.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      if (!draggedCategoryId || draggedCategoryId === Number(item.getAttribute('data-category-item') || 0)) return;
+      event.dataTransfer.dropEffect = 'move';
+      document.querySelectorAll('.category-tree-item.is-drop-target').forEach((node) => node.classList.remove('is-drop-target'));
+      item.classList.add('is-drop-target');
+    });
+
+    item.addEventListener('dragleave', () => {
+      item.classList.remove('is-drop-target');
+    });
+
+    item.addEventListener('drop', async (event) => {
+      event.preventDefault();
+      item.classList.remove('is-drop-target');
+      const targetId = Number(item.getAttribute('data-category-item') || 0);
+      if (!draggedCategoryId || !targetId || draggedCategoryId === targetId) return;
+
+      const draggedItem = document.querySelector(`[data-category-item="${draggedCategoryId}"]`);
+      if (!(draggedItem instanceof HTMLElement)) return;
+      const targetItem = item;
+      const group = targetItem.parentElement;
+      if (!(group instanceof HTMLElement) || draggedItem.parentElement !== group) {
+        setError('目前只支持同级分类之间拖拽排序。');
+        return;
+      }
+
+      const targetRect = targetItem.getBoundingClientRect();
+      const insertAfter = event.clientY > targetRect.top + targetRect.height / 2;
+      if (insertAfter) {
+        group.insertBefore(draggedItem, targetItem.nextElementSibling);
+      } else {
+        group.insertBefore(draggedItem, targetItem);
+      }
+
+      try {
+        setError('');
+        await persistCategoryGroupOrder(group);
+        await loadAll();
+        render();
+      } catch (error) {
+        setError(error.message || '更新分类顺序失败');
+        await loadAll();
+        render();
+      }
+    });
+  });
 }
 
 function shippingDisplay(order) {
@@ -650,7 +732,7 @@ function render() {
         </form>
         <div class="panel panel-list">
           <h2>分类树</h2>
-          <p class="panel-note">在这里用“左移 / 右移”调整同级分类顺序。顶部导航会按这里的顺序从左到右显示。</p>
+          <p class="panel-note">直接拖拽这里的分类顺序。后台从上到下的顺序，就是前台导航从左到右的顺序。</p>
           <div class="category-tree">${categoryTreeHtml(tree)}</div>
         </div>
       </div>`
@@ -892,25 +974,7 @@ function bindEvents() {
     });
   });
 
-  document.querySelectorAll('[data-move-category]').forEach((node) => {
-    node.addEventListener('click', async () => {
-      const id = Number(node.dataset.moveCategory || 0);
-      const direction = String(node.dataset.direction || '');
-      if (!id || !direction) return;
-      setError('');
-      try {
-        await request(`/api/categories/${id}/reorder`, {
-          method: 'POST',
-          headers: headers({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({ direction })
-        });
-        await loadAll();
-        render();
-      } catch (error) {
-        setError(error.message || '调整分类顺序失败');
-      }
-    });
-  });
+  bindCategoryTreeDnD();
 
   document.querySelector('#build-matrix')?.addEventListener('click', () => {
     syncProductFormFromDom();
