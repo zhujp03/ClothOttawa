@@ -90,8 +90,14 @@ img {
   min-height: 78px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "brand . actions"
+    "nav nav nav";
+  grid-template-rows: auto auto;
   align-items: center;
-  gap: 2rem;
+  column-gap: 2rem;
+  row-gap: 0.85rem;
+  overflow: visible;
 }
 
 .mobile-header-row {
@@ -100,6 +106,7 @@ img {
 
 .desktop-brand {
   display: inline-flex;
+  grid-area: brand;
 }
 
 .mobile-menu-toggle {
@@ -458,25 +465,22 @@ img {
 }
 
 .mega-nav {
+  grid-area: nav;
   display: flex;
   justify-content: flex-start;
-  gap: 1.1rem;
+  gap: 0.4rem 1rem;
   align-items: center;
+  align-content: center;
   min-width: 0;
-  overflow-x: auto;
-  overflow-y: visible;
-  flex-wrap: nowrap;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-
-.mega-nav::-webkit-scrollbar {
-  display: none;
+  overflow: visible;
+  flex-wrap: wrap;
+  padding: 0.2rem 0;
 }
 
 .nav-group {
   position: relative;
   flex: 0 0 auto;
+  z-index: 2;
 }
 
 .nav-parent {
@@ -489,7 +493,8 @@ img {
   transition: background-color 180ms ease, color 180ms ease;
 }
 
-.nav-group:hover .nav-parent {
+.nav-group:hover .nav-parent,
+.nav-group:focus-within .nav-parent {
   background: rgba(18, 122, 115, 0.12);
   color: var(--ink-900);
 }
@@ -508,9 +513,11 @@ img {
   transform: translateY(8px);
   pointer-events: none;
   transition: opacity 180ms ease, transform 180ms ease;
+  z-index: 30;
 }
 
-.nav-group:hover .nav-dropdown {
+.nav-group:hover .nav-dropdown,
+.nav-group:focus-within .nav-dropdown {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
@@ -554,10 +561,12 @@ img {
 }
 
 .desktop-nav {
-  justify-self: stretch;
+  position: relative;
+  min-width: 0;
 }
 
 .desktop-actions {
+  grid-area: actions;
   justify-self: end;
 }
 

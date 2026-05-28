@@ -17,7 +17,7 @@ async function main() {
     {
       username: 'admin',
       email: 'admin@luxurystation.local',
-      password: 'admin1383',
+      password: 'admin123',
       role: 'ADMIN'
     },
     {

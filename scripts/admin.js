@@ -23,6 +23,8 @@ function initialProductForm() {
     isActive: true,
     introPdfUrl: '',
     imageUrls: [],
+    pendingImageFiles: [],
+    pendingSpecPdfFile: null,
     variantColors: '',
     variantSizes: '',
     defaultVariantStock: 0,
@@ -79,22 +81,6 @@ function buildTree(items) {
   return roots;
 }
 
-function buildCategoryPathMap(items = []) {
-  const byId = new Map(items.map((item) => [item.id, item]));
-  const cache = new Map();
-  function getPath(id) {
-    if (cache.has(id)) return cache.get(id);
-    const item = byId.get(id);
-    if (!item) return '';
-    const parentPath = item.parentId ? getPath(item.parentId) : '';
-    const path = parentPath ? `${parentPath} / ${item.name}` : item.name;
-    cache.set(id, path);
-    return path;
-  }
-  items.forEach((item) => getPath(item.id));
-  return cache;
-}
-
 function buildCategoryOptions(nodes, selectedValue = '', depth = 0) {
   return nodes
     .map((node) => {
@@ -142,6 +128,7 @@ const state = {
 
 let autoRefreshTimer = null;
 let draggedCategoryId = null;
+let categoryReorderInFlight = false;
 
 function headers(extra = {}) {
   return { Authorization: `Bearer ${token}`, ...extra };
@@ -174,6 +161,117 @@ function setError(message = '') {
   if (!node) return;
   node.textContent = message;
   node.style.display = message ? 'block' : 'none';
+}
+
+function cloneProductFormFiles(files = []) {
+  return Array.from(files).filter((file) => file instanceof File);
+}
+
+function selectedFilesSummary(files = []) {
+  if (!files.length) return '';
+  if (files.length === 1) return files[0].name;
+  const names = files
+    .slice(0, 3)
+    .map((file) => file.name)
+    .join('、');
+  return files.length > 3 ? `${names} 等 ${files.length} 张` : `${names}（共 ${files.length} 张）`;
+}
+
+function variantMatrixHtml(variants = []) {
+  if (!variants.length) return '';
+  return `<div class="variant-matrix">
+      <table>
+        <thead><tr><th>颜色</th><th>尺码</th><th>库存</th><th>SKU（自动）</th></tr></thead>
+        <tbody>
+          ${variants
+            .map(
+              (variant, index) => `
+            <tr>
+              <td>${variant.color}</td>
+              <td>${variant.size}</td>
+              <td><input type="number" min="0" step="1" data-stock-index="${index}" value="${variant.stock}" /></td>
+              <td>${variant.sku || '提交后自动生成'}</td>
+            </tr>
+          `
+            )
+            .join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function bindVariantStockInputs() {
+  document.querySelectorAll('[data-stock-index]').forEach((node) => {
+    node.addEventListener('change', () => {
+      const index = Number(node.dataset.stockIndex);
+      state.productForm.variants[index].stock = Number(node.value || 0);
+    });
+  });
+}
+
+function syncProductFilesFromInputs() {
+  const imageInput = document.querySelector('#product-form input[name="images"]');
+  if (imageInput instanceof HTMLInputElement) {
+    state.productForm.pendingImageFiles = cloneProductFormFiles(imageInput.files || []);
+  }
+
+  const pdfInput = document.querySelector('#product-form input[name="specPdf"]');
+  if (pdfInput instanceof HTMLInputElement) {
+    state.productForm.pendingSpecPdfFile = pdfInput.files?.[0] instanceof File ? pdfInput.files[0] : null;
+  }
+}
+
+function restoreProductFilesToInputs() {
+  const imageInput = document.querySelector('#product-form input[name="images"]');
+  if (imageInput instanceof HTMLInputElement && Array.isArray(state.productForm.pendingImageFiles) && typeof DataTransfer !== 'undefined') {
+    const transfer = new DataTransfer();
+    state.productForm.pendingImageFiles.forEach((file) => transfer.items.add(file));
+    imageInput.files = transfer.files;
+  }
+
+  const pdfInput = document.querySelector('#product-form input[name="specPdf"]');
+  if (pdfInput instanceof HTMLInputElement && state.productForm.pendingSpecPdfFile instanceof File && typeof DataTransfer !== 'undefined') {
+    const transfer = new DataTransfer();
+    transfer.items.add(state.productForm.pendingSpecPdfFile);
+    pdfInput.files = transfer.files;
+  }
+}
+
+function renderVariantMatrix() {
+  const container = document.querySelector('#variant-matrix-container');
+  if (!container) return;
+  container.innerHTML = variantMatrixHtml(state.productForm.variants);
+  bindVariantStockInputs();
+}
+
+function categoryParentIdFromGroup(group) {
+  const parentAttr = group.getAttribute('data-parent-id');
+  return parentAttr ? Number(parentAttr) : null;
+}
+
+function categoryOrderedIdsFromGroup(group) {
+  return [...group.children]
+    .map((node) => Number(node.getAttribute('data-category-item') || 0))
+    .filter(Boolean);
+}
+
+function applyLocalCategoryOrder(parentId, orderedIds) {
+  const rank = new Map(orderedIds.map((id, index) => [Number(id), index]));
+  state.categories = state.categories
+    .map((item) =>
+      item.parentId === parentId && rank.has(item.id)
+        ? {
+            ...item,
+            sortOrder: rank.get(item.id)
+          }
+        : item
+    )
+    .sort((a, b) => {
+      const parentA = a.parentId ?? -1;
+      const parentB = b.parentId ?? -1;
+      if (parentA !== parentB) return parentA - parentB;
+      return Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || a.id - b.id;
+    });
 }
 
 async function loadAll() {
@@ -258,17 +356,14 @@ function categoryTreeHtml(nodes, depth = 0, parentId = null) {
 }
 
 async function persistCategoryGroupOrder(group) {
-  const parentAttr = group.getAttribute('data-parent-id');
-  const orderedIds = [...group.children]
-    .map((node) => Number(node.getAttribute('data-category-item') || 0))
-    .filter(Boolean);
+  const orderedIds = categoryOrderedIdsFromGroup(group);
   if (orderedIds.length === 0) return;
 
   await request('/api/categories/reorder', {
     method: 'POST',
     headers: headers({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
-      parentId: parentAttr ? Number(parentAttr) : null,
+      parentId: categoryParentIdFromGroup(group),
       orderedIds
     })
   });
@@ -315,6 +410,10 @@ function bindCategoryTreeDnD() {
         setError('目前只支持同级分类之间拖拽排序。');
         return;
       }
+      if (categoryReorderInFlight) {
+        setError('上一条分类排序还在保存，请稍候再拖拽。');
+        return;
+      }
 
       const targetRect = targetItem.getBoundingClientRect();
       const insertAfter = event.clientY > targetRect.top + targetRect.height / 2;
@@ -324,15 +423,24 @@ function bindCategoryTreeDnD() {
         group.insertBefore(draggedItem, targetItem);
       }
 
+      const parentId = categoryParentIdFromGroup(group);
+      const orderedIds = categoryOrderedIdsFromGroup(group);
+      const previousCategories = state.categories.map((category) => ({ ...category }));
+
       try {
+        categoryReorderInFlight = true;
         setError('');
+        applyLocalCategoryOrder(parentId, orderedIds);
+        render();
         await persistCategoryGroupOrder(group);
-        await loadAll();
+        state.categories = await request('/api/categories', { headers: headers() });
         render();
       } catch (error) {
+        state.categories = previousCategories;
         setError(error.message || '更新分类顺序失败');
-        await loadAll();
         render();
+      } finally {
+        categoryReorderInFlight = false;
       }
     });
   });
@@ -683,12 +791,7 @@ function render() {
   const root = document.querySelector('#admin-root');
   if (!root) return;
 
-  const pathMap = buildCategoryPathMap(state.categories);
-  const sortedCategories = [...state.categories].sort((a, b) =>
-    (pathMap.get(a.id) || a.name).localeCompare(pathMap.get(b.id) || b.name)
-  );
   const tree = buildTree(state.categories);
-  tree.sort((a, b) => a.name.localeCompare(b.name));
   const categoryOptionsForParent = buildCategoryOptions(tree, state.categoryForm.parentId);
   const categoryOptionsForProduct = buildCategoryOptions(tree, state.productForm.categoryId);
   const canCatalog = hasPermission(PERMISSION.CATALOG);
@@ -769,6 +872,16 @@ function render() {
           } /><span>是否上架</span></label>
         </div>
         ${
+          state.productForm.pendingImageFiles.length > 0
+            ? `<p class="table-subline">待上传图片：${selectedFilesSummary(state.productForm.pendingImageFiles)}</p>`
+            : ''
+        }
+        ${
+          state.productForm.pendingSpecPdfFile
+            ? `<p class="table-subline">待上传 PDF：${state.productForm.pendingSpecPdfFile.name}</p>`
+            : ''
+        }
+        ${
           state.productForm.introPdfUrl
             ? `<p class="table-subline">当前产品介绍文件：<a href="${state.productForm.introPdfUrl}" target="_blank" rel="noopener">查看 PDF</a></p>`
             : ''
@@ -789,29 +902,7 @@ function render() {
           </div>
           <div class="variant-actions"><button type="button" class="ghost-btn" id="build-matrix">生成库存矩阵</button></div>
           <div class="variant-help">SKU 自动生成且唯一（按商品 + 颜色 + 尺码），你只需要填库存。</div>
-          ${
-            state.productForm.variants.length > 0
-              ? `<div class="variant-matrix">
-              <table>
-                <thead><tr><th>颜色</th><th>尺码</th><th>库存</th><th>SKU（自动）</th></tr></thead>
-                <tbody>
-                  ${state.productForm.variants
-                    .map(
-                      (variant, index) => `
-                    <tr>
-                      <td>${variant.color}</td>
-                      <td>${variant.size}</td>
-                      <td><input type="number" min="0" step="1" data-stock-index="${index}" value="${variant.stock}" /></td>
-                      <td>${variant.sku || '提交后自动生成'}</td>
-                    </tr>
-                  `
-                    )
-                    .join('')}
-                </tbody>
-              </table>
-            </div>`
-              : ''
-          }
+          <div id="variant-matrix-container">${variantMatrixHtml(state.productForm.variants)}</div>
         </div>
         <button type="submit">${state.productForm.id ? '更新商品' : '创建商品'}</button>
       </form>`
@@ -978,12 +1069,25 @@ function bindEvents() {
 
   document.querySelector('#build-matrix')?.addEventListener('click', () => {
     syncProductFormFromDom();
+    syncProductFilesFromInputs();
     const colors = parseOptionList(state.productForm.variantColors);
     const sizes = parseOptionList(state.productForm.variantSizes);
     state.productForm.variants =
       colors.length > 0 && sizes.length > 0
         ? buildVariantMatrix(colors, sizes, state.productForm.variants, state.productForm.defaultVariantStock)
         : [];
+    renderVariantMatrix();
+  });
+
+  document.querySelector('#product-form input[name="images"]')?.addEventListener('change', () => {
+    syncProductFormFromDom();
+    syncProductFilesFromInputs();
+    render();
+  });
+
+  document.querySelector('#product-form input[name="specPdf"]')?.addEventListener('change', () => {
+    syncProductFormFromDom();
+    syncProductFilesFromInputs();
     render();
   });
 
@@ -996,18 +1100,16 @@ function bindEvents() {
     if (!target.checked) saleInput.value = '';
   });
 
-  document.querySelectorAll('[data-stock-index]').forEach((node) => {
-    node.addEventListener('change', () => {
-      const index = Number(node.dataset.stockIndex);
-      state.productForm.variants[index].stock = Number(node.value || 0);
-    });
-  });
-
   document.querySelector('#product-form')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     setError('');
     const form = event.currentTarget;
+    if (form instanceof HTMLFormElement && !form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
     const raw = new FormData(form);
+    syncProductFilesFromInputs();
 
     if (state.productForm.variants.length === 0) {
       setError('请先生成库存矩阵并填写库存');
@@ -1055,7 +1157,7 @@ function bindEvents() {
     submitData.append('categoryId', String(raw.get('categoryId') || ''));
     submitData.append('isActive', raw.get('isActive') ? 'true' : 'false');
     submitData.append('variants', JSON.stringify(cleanVariants));
-    const galleryImages = raw.getAll('images');
+    const galleryImages = cloneProductFormFiles(state.productForm.pendingImageFiles);
     const hasAtLeastOneImage = galleryImages.some((file) => file && file.size > 0);
     if (!state.productForm.id && !hasAtLeastOneImage) {
       setError('创建商品时至少需要上传 1 张商品图片');
@@ -1064,7 +1166,7 @@ function bindEvents() {
     galleryImages.forEach((file) => {
       if (file && file.size > 0) submitData.append('images', file);
     });
-    const specPdf = raw.get('specPdf');
+    const specPdf = state.productForm.pendingSpecPdfFile;
     if (specPdf && specPdf.size > 0) submitData.append('specPdf', specPdf);
 
     try {
@@ -1110,6 +1212,8 @@ function bindEvents() {
         isActive: Boolean(product.isActive),
         introPdfUrl: product.introPdfUrl || '',
         imageUrls: Array.isArray(product.imageUrls) ? product.imageUrls : product.imageUrl ? [product.imageUrl] : [],
+        pendingImageFiles: [],
+        pendingSpecPdfFile: null,
         variantColors: [
           ...new Set((product.variants || []).map((item) => String(item.color || '').trim()).filter(Boolean))
         ].join(', '),
@@ -1251,6 +1355,8 @@ function bindEvents() {
   });
 
   bindOrderEvents();
+  bindVariantStockInputs();
+  restoreProductFilesToInputs();
 }
 
 async function init() {
