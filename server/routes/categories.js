@@ -240,18 +240,21 @@ router.post('/:id/reorder', requireAdminPermission(ADMIN_PERMISSION.CATALOG), as
     return res.json({ moved: false, boundary: true });
   }
 
-  const target = siblings[targetIndex];
+  const reordered = [...siblings];
+  const [movedItem] = reordered.splice(currentIndex, 1);
+  reordered.splice(targetIndex, 0, movedItem);
 
-  await prisma.$transaction([
-    prisma.category.update({
-      where: { id: category.id },
-      data: { sortOrder: target.sortOrder }
-    }),
-    prisma.category.update({
-      where: { id: target.id },
-      data: { sortOrder: category.sortOrder }
-    })
-  ]);
+  await prisma.$transaction(
+    reordered
+      .map((item, index) => ({ ...item, nextSortOrder: index }))
+      .filter((item) => item.sortOrder !== item.nextSortOrder)
+      .map((item) =>
+        prisma.category.update({
+          where: { id: item.id },
+          data: { sortOrder: item.nextSortOrder }
+        })
+      )
+  );
 
   return res.json({ moved: true });
 });
