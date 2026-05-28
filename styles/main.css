@@ -180,13 +180,15 @@ img {
   right: 0;
   z-index: 45;
   width: min(92vw, 420px);
+  height: 100vh;
   height: 100dvh;
   background: linear-gradient(180deg, #fbfaf7, #f4f0e8);
   border-left: 1px solid var(--line-soft);
   box-shadow: -12px 0 32px rgba(22, 30, 32, 0.18);
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 0.7rem;
+  min-height: 0;
   padding: calc(0.75rem + env(safe-area-inset-top, 0px)) 0.9rem calc(0.9rem + env(safe-area-inset-bottom, 0px));
   transform: translateX(104%);
   opacity: 0.98;
@@ -255,7 +257,7 @@ img {
 }
 
 .mobile-nav-links {
-  overflow: auto;
+  overflow: visible;
   display: grid;
   gap: 0.7rem;
   align-content: start;
@@ -344,18 +346,26 @@ img {
 .mobile-nav-stage {
   position: relative;
   overflow: hidden;
-  min-height: 420px;
-  flex: 1;
+  min-height: 0;
 }
 
 .mobile-nav-view {
   position: absolute;
   inset: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 0.15rem;
+  padding-bottom: 0.25rem;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   transition: transform 260ms cubic-bezier(0.22, 0.8, 0.22, 1), opacity 220ms ease;
   will-change: transform, opacity;
 }
 
 #mobile-nav-main.mobile-nav-view {
+  display: grid;
+  gap: 0.7rem;
+  align-content: start;
   transform: translateX(0);
   opacity: 1;
 }
