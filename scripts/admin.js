@@ -964,6 +964,11 @@ function bindEvents() {
     submitData.append('isActive', raw.get('isActive') ? 'true' : 'false');
     submitData.append('variants', JSON.stringify(cleanVariants));
     const galleryImages = raw.getAll('images');
+    const hasAtLeastOneImage = galleryImages.some((file) => file && file.size > 0);
+    if (!state.productForm.id && !hasAtLeastOneImage) {
+      setError('创建商品时至少需要上传 1 张商品图片');
+      return;
+    }
     galleryImages.forEach((file) => {
       if (file && file.size > 0) submitData.append('images', file);
     });

@@ -426,6 +426,9 @@ router.post(
 
   const uploaded = extractUploadedFiles(req);
   const gallery = uploaded.imageUrls;
+  if (gallery.length === 0) {
+    return res.status(400).json({ message: 'At least one product image is required when creating a product' });
+  }
 
   const created = await prisma.product.create({
     data: {
