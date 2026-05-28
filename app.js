@@ -94,6 +94,23 @@ app.use((_req, res) => {
   res.status(404).sendFile(path.join(pagesDir, '404.html'));
 });
 
+app.use((error, _req, res, next) => {
+  if (
+    error?.code === 'LIMIT_FILE_SIZE' ||
+    error?.type === 'entity.too.large' ||
+    error?.status === 413 ||
+    error?.statusCode === 413
+  ) {
+    res.status(413).json({
+      message:
+        '上传内容太大。请压缩单张图片后再试，或拆分后分批上传。当前服务器支持单个文件最高 25MB。'
+    });
+    return;
+  }
+
+  next(error);
+});
+
 app.listen(port, () => {
   console.log(`Node app running: http://localhost:${port}`);
   startEtransferMonitor();

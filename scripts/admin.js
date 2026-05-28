@@ -865,8 +865,8 @@ function render() {
               ${categoryOptionsForProduct}
             </select>
           </label>
-          <label class="span-2">商品图片（可多选，JPG/PNG）<input type="file" name="images" multiple accept=".jpg,.jpeg,.png,image/jpeg,image/png" /></label>
-          <label>产品介绍PDF（最大10MB）<input type="file" name="specPdf" accept="application/pdf,.pdf" /></label>
+          <label class="span-2">商品图片（可多选，JPG/PNG，单张最大 25MB）<input type="file" name="images" multiple accept=".jpg,.jpeg,.png,image/jpeg,image/png" /></label>
+          <label>产品介绍PDF（最大 25MB）<input type="file" name="specPdf" accept="application/pdf,.pdf" /></label>
           <label class="toggle-row"><input type="checkbox" name="isActive" ${
             state.productForm.isActive ? 'checked' : ''
           } /><span>是否上架</span></label>
