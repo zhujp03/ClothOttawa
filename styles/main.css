@@ -458,9 +458,11 @@ img {
 }
 
 .brand-link {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-style: italic;
   letter-spacing: 0.11em;
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-size: 1.1rem;
+  font-weight: 400;
   color: var(--ink-900);
 }
 
@@ -1650,6 +1652,100 @@ button:disabled {
   object-fit: cover;
   user-select: none;
   -webkit-user-drag: none;
+  cursor: zoom-in;
+  transform-origin: center center;
+  transition: transform 140ms ease-out;
+}
+
+.pdp-image.is-zooming {
+  transform: scale(2);
+  cursor: zoom-out;
+}
+
+.pdp-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(14, 18, 20, 0.58);
+  backdrop-filter: blur(3px);
+  z-index: 130;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.pdp-lightbox[hidden] {
+  display: none !important;
+}
+
+.pdp-lightbox-stage {
+  position: relative;
+  width: min(96vw, 1100px);
+  height: min(92vh, 860px);
+  overflow: hidden;
+  touch-action: none;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  background: rgba(14, 18, 20, 0.3);
+}
+
+.pdp-lightbox-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform-origin: center center;
+  will-change: transform;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.pdp-lightbox-close {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: rgba(14, 18, 20, 0.62);
+  color: #fff;
+  font-size: 1.35rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 3;
+}
+
+.pdp-lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: rgba(14, 18, 20, 0.62);
+  color: #fff;
+  font-size: 1.35rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 3;
+}
+
+.pdp-lightbox-nav[hidden] {
+  display: none !important;
+}
+
+.pdp-lightbox-nav-left {
+  left: 0.9rem;
+}
+
+.pdp-lightbox-nav-right {
+  right: 0.9rem;
 }
 
 .pdp-arrow {

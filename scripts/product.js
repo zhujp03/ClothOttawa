@@ -37,6 +37,15 @@ function normalizeVariants(variants = []) {
   }));
 }
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function isCoarsePointerDevice() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return window.matchMedia('(pointer: coarse)').matches;
+}
+
 async function init() {
   await renderHeader();
   const root = document.querySelector('#product-root');
@@ -181,6 +190,217 @@ async function init() {
     }
   `;
 
+  const lightboxMarkup = `
+    <div class="pdp-lightbox" id="pdp-lightbox" hidden>
+      <div class="pdp-lightbox-stage" id="pdp-lightbox-stage">
+        <button type="button" class="pdp-lightbox-nav pdp-lightbox-nav-left" id="pdp-lightbox-prev" aria-label="Previous image">‹</button>
+        <button type="button" class="pdp-lightbox-nav pdp-lightbox-nav-right" id="pdp-lightbox-next" aria-label="Next image">›</button>
+        <button type="button" class="pdp-lightbox-close" id="pdp-lightbox-close" aria-label="Close image preview">×</button>
+        <img src="" alt="" class="pdp-lightbox-image" id="pdp-lightbox-image" />
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', lightboxMarkup);
+
+  const lightbox = document.querySelector('#pdp-lightbox');
+  const lightboxStage = document.querySelector('#pdp-lightbox-stage');
+  const lightboxImage = document.querySelector('#pdp-lightbox-image');
+  const lightboxClose = document.querySelector('#pdp-lightbox-close');
+  const lightboxPrev = document.querySelector('#pdp-lightbox-prev');
+  const lightboxNext = document.querySelector('#pdp-lightbox-next');
+  const lightboxState = {
+    open: false,
+    scale: 1,
+    offsetX: 0,
+    offsetY: 0,
+    startPanX: 0,
+    startPanY: 0,
+    startOffsetX: 0,
+    startOffsetY: 0,
+    isPanning: false,
+    pinchStartDistance: 0,
+    pinchStartScale: 1,
+    pinchCenterX: 0,
+    pinchCenterY: 0,
+    swipeStartX: 0,
+    swipeStartY: 0
+  };
+
+  function updateLightboxNavigation() {
+    const canSlide = imageUrls.length > 1;
+    if (lightboxPrev) lightboxPrev.hidden = !canSlide;
+    if (lightboxNext) lightboxNext.hidden = !canSlide;
+  }
+
+  function showLightboxImageByIndex(nextIndex) {
+    if (!(lightboxImage && imageUrls.length)) return;
+    imageIndex = (nextIndex + imageUrls.length) % imageUrls.length;
+    lightboxImage.src = imageUrls[imageIndex];
+    lightboxImage.alt = `${product.name} image ${imageIndex + 1}`;
+    resetLightboxTransform();
+    updateLightboxNavigation();
+  }
+
+  function applyLightboxTransform() {
+    if (!lightboxImage) return;
+    lightboxImage.style.transform = `translate(${lightboxState.offsetX}px, ${lightboxState.offsetY}px) scale(${lightboxState.scale})`;
+  }
+
+  function resetLightboxTransform() {
+    lightboxState.scale = 1;
+    lightboxState.offsetX = 0;
+    lightboxState.offsetY = 0;
+    lightboxState.startPanX = 0;
+    lightboxState.startPanY = 0;
+    lightboxState.startOffsetX = 0;
+    lightboxState.startOffsetY = 0;
+    lightboxState.isPanning = false;
+    lightboxState.pinchStartDistance = 0;
+    lightboxState.pinchStartScale = 1;
+    applyLightboxTransform();
+  }
+
+  function closeLightbox() {
+    if (!lightbox || !lightboxState.open) return;
+    lightbox.hidden = true;
+    document.body.style.overflow = '';
+    lightboxState.open = false;
+    resetLightboxTransform();
+  }
+
+  function openLightbox(src, altText) {
+    if (!(lightbox && lightboxImage)) return;
+    lightboxImage.src = src;
+    lightboxImage.alt = altText || 'Product image preview';
+    resetLightboxTransform();
+    updateLightboxNavigation();
+    lightbox.hidden = false;
+    lightboxState.open = true;
+    document.body.style.overflow = 'hidden';
+  }
+
+  function touchDistance(touchA, touchB) {
+    const dx = touchA.clientX - touchB.clientX;
+    const dy = touchA.clientY - touchB.clientY;
+    return Math.hypot(dx, dy);
+  }
+
+  function touchCenter(touchA, touchB) {
+    return {
+      x: (touchA.clientX + touchB.clientX) / 2,
+      y: (touchA.clientY + touchB.clientY) / 2
+    };
+  }
+
+  function onLightboxTouchStart(event) {
+    if (!lightboxState.open) return;
+    if (event.touches.length === 2) {
+      const [first, second] = event.touches;
+      lightboxState.pinchStartDistance = touchDistance(first, second);
+      lightboxState.pinchStartScale = lightboxState.scale;
+      const center = touchCenter(first, second);
+      lightboxState.pinchCenterX = center.x;
+      lightboxState.pinchCenterY = center.y;
+      lightboxState.isPanning = false;
+      return;
+    }
+    if (event.touches.length === 1 && lightboxState.scale > 1) {
+      const finger = event.touches[0];
+      lightboxState.isPanning = true;
+      lightboxState.startPanX = finger.clientX;
+      lightboxState.startPanY = finger.clientY;
+      lightboxState.startOffsetX = lightboxState.offsetX;
+      lightboxState.startOffsetY = lightboxState.offsetY;
+      return;
+    }
+    if (event.touches.length === 1) {
+      const finger = event.touches[0];
+      lightboxState.swipeStartX = finger.clientX;
+      lightboxState.swipeStartY = finger.clientY;
+    }
+  }
+
+  function onLightboxTouchMove(event) {
+    if (!lightboxState.open) return;
+    if (event.touches.length === 2) {
+      event.preventDefault();
+      const [first, second] = event.touches;
+      const nextDistance = touchDistance(first, second);
+      if (!lightboxState.pinchStartDistance) {
+        lightboxState.pinchStartDistance = nextDistance;
+        return;
+      }
+      const rawScale = lightboxState.pinchStartScale * (nextDistance / lightboxState.pinchStartDistance);
+      lightboxState.scale = clamp(rawScale, 1, 4);
+      if (lightboxState.scale <= 1) {
+        lightboxState.offsetX = 0;
+        lightboxState.offsetY = 0;
+      }
+      applyLightboxTransform();
+      return;
+    }
+    if (event.touches.length === 1 && lightboxState.isPanning && lightboxState.scale > 1) {
+      event.preventDefault();
+      const finger = event.touches[0];
+      const deltaX = finger.clientX - lightboxState.startPanX;
+      const deltaY = finger.clientY - lightboxState.startPanY;
+      const maxShift = 220 * (lightboxState.scale - 1);
+      lightboxState.offsetX = clamp(lightboxState.startOffsetX + deltaX, -maxShift, maxShift);
+      lightboxState.offsetY = clamp(lightboxState.startOffsetY + deltaY, -maxShift, maxShift);
+      applyLightboxTransform();
+    }
+  }
+
+  function onLightboxTouchEnd(event) {
+    if (!lightboxState.open) return;
+    if (event.touches.length === 0) {
+      if (lightboxState.scale === 1 && !lightboxState.isPanning && imageUrls.length > 1) {
+        const touch = event.changedTouches?.[0];
+        if (touch) {
+          const deltaX = touch.clientX - lightboxState.swipeStartX;
+          const deltaY = touch.clientY - lightboxState.swipeStartY;
+          if (Math.abs(deltaX) > 42 && Math.abs(deltaX) > Math.abs(deltaY)) {
+            if (deltaX < 0) showLightboxImageByIndex(imageIndex + 1);
+            else showLightboxImageByIndex(imageIndex - 1);
+          }
+        }
+      }
+      lightboxState.isPanning = false;
+      lightboxState.pinchStartDistance = 0;
+      lightboxState.pinchStartScale = lightboxState.scale;
+      lightboxState.swipeStartX = 0;
+      lightboxState.swipeStartY = 0;
+      return;
+    }
+    if (event.touches.length === 1 && lightboxState.scale > 1) {
+      const finger = event.touches[0];
+      lightboxState.isPanning = true;
+      lightboxState.startPanX = finger.clientX;
+      lightboxState.startPanY = finger.clientY;
+      lightboxState.startOffsetX = lightboxState.offsetX;
+      lightboxState.startOffsetY = lightboxState.offsetY;
+    }
+  }
+
+  lightboxClose?.addEventListener('click', closeLightbox);
+  lightboxPrev?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    showLightboxImageByIndex(imageIndex - 1);
+  });
+  lightboxNext?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    showLightboxImageByIndex(imageIndex + 1);
+  });
+  lightbox?.addEventListener('click', (event) => {
+    if (event.target === lightbox) closeLightbox();
+  });
+  lightboxStage?.addEventListener('touchstart', onLightboxTouchStart, { passive: false });
+  lightboxStage?.addEventListener('touchmove', onLightboxTouchMove, { passive: false });
+  lightboxStage?.addEventListener('touchend', onLightboxTouchEnd, { passive: false });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeLightbox();
+  });
+
   function bindMediaEvents() {
     const track = document.querySelector('#pdp-carousel-track');
     if (!track) return;
@@ -209,6 +429,33 @@ async function init() {
         document.querySelectorAll('[data-img-index]').forEach((other) => {
           other.classList.toggle('active', Number(other.dataset.imgIndex) === imageIndex);
         });
+      });
+    });
+
+    const coarsePointer = isCoarsePointerDevice();
+    document.querySelectorAll('.pdp-image').forEach((img, idx) => {
+      if (coarsePointer) {
+        img.addEventListener('click', () => {
+          imageIndex = idx;
+          openLightbox(imageUrls[idx], `${product.name} image ${idx + 1}`);
+        });
+        return;
+      }
+
+      img.addEventListener('mouseenter', () => {
+        img.classList.add('is-zooming');
+      });
+      img.addEventListener('mousemove', (event) => {
+        const rect = img.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        const x = clamp(((event.clientX - rect.left) / rect.width) * 100, 0, 100);
+        const y = clamp(((event.clientY - rect.top) / rect.height) * 100, 0, 100);
+        img.style.transformOrigin = `${x}% ${y}%`;
+        img.classList.add('is-zooming');
+      });
+      img.addEventListener('mouseleave', () => {
+        img.classList.remove('is-zooming');
+        img.style.transformOrigin = 'center center';
       });
     });
   }
