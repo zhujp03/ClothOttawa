@@ -40,6 +40,10 @@ app.use(
 );
 
 app.use(morgan('dev'));
+app.use((_req, res, next) => {
+  res.setHeader('x-app-server', 'clothottawa-express');
+  next();
+});
 app.use('/api/orders/square/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -85,16 +89,11 @@ app.get('/admin/messages', servePage('admin-messages.html'));
 app.get('/admin/users', servePage('admin-users.html'));
 app.get('/admin/blocked-users', servePage('admin-blocked-users.html'));
 
-app.use((error, _req, res, _next) => {
-  console.error(error);
-  res.status(500).json({ message: error.message || 'Unexpected server error' });
-});
-
 app.use((_req, res) => {
   res.status(404).sendFile(path.join(pagesDir, '404.html'));
 });
 
-app.use((error, _req, res, next) => {
+app.use((error, _req, res, _next) => {
   if (
     error?.code === 'LIMIT_FILE_SIZE' ||
     error?.type === 'entity.too.large' ||
@@ -108,7 +107,9 @@ app.use((error, _req, res, next) => {
     return;
   }
 
-  next(error);
+  console.error(error);
+  const status = Number(error?.status || error?.statusCode || 500);
+  res.status(status).json({ message: error?.message || 'Unexpected server error' });
 });
 
 app.listen(port, () => {
