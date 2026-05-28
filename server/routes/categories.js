@@ -11,7 +11,12 @@ const router = Router();
 const categorySchema = z.object({
   name: z.string().min(2).max(80),
   slug: z.string().min(2).max(90).optional(),
+  sortOrder: z.coerce.number().int().min(0).optional(),
   parentId: z.coerce.number().int().positive().nullable().optional()
+});
+
+const reorderSchema = z.object({
+  direction: z.enum(['previous', 'next'])
 });
 
 function buildTree(items) {
@@ -25,6 +30,11 @@ function buildTree(items) {
       roots.push(item);
     }
   }
+
+  for (const item of map.values()) {
+    item.children.sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+  }
+  roots.sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
 
   return roots;
 }
@@ -93,13 +103,22 @@ async function ensureFallbackCategory(excludeId = null) {
   });
 }
 
+async function nextSortOrderForParent(parentId = null) {
+  const sibling = await prisma.category.findFirst({
+    where: { parentId },
+    orderBy: [{ sortOrder: 'desc' }, { id: 'desc' }],
+    select: { sortOrder: true }
+  });
+  return Number(sibling?.sortOrder || 0) + (sibling ? 1 : 0);
+}
+
 router.get('/', async (req, res) => {
   const locale = resolveLocale(req);
   const flat = await prisma.category.findMany({
     include: {
       _count: { select: { products: true, children: true } }
     },
-    orderBy: [{ parentId: 'asc' }, { name: 'asc' }]
+    orderBy: [{ parentId: 'asc' }, { sortOrder: 'asc' }, { id: 'asc' }]
   });
 
   const baseRows = locale === 'fr' ? await hydrateFrenchNames(flat) : flat;
@@ -119,7 +138,7 @@ router.post('/', requireAdminPermission(ADMIN_PERMISSION.CATALOG), async (req, r
     return res.status(400).json({ message: 'Invalid payload', errors: parsed.error.issues });
   }
 
-  const { name, parentId = null, slug } = parsed.data;
+  const { name, parentId = null, slug, sortOrder } = parsed.data;
 
   if (parentId) {
     const parent = await prisma.category.findUnique({ where: { id: parentId } });
@@ -131,13 +150,15 @@ router.post('/', requireAdminPermission(ADMIN_PERMISSION.CATALOG), async (req, r
 
   const nextSlug = await uniqueSlug(prisma, 'category', slug || name);
   const nameFr = await ensureCategoryFrenchName(name, null);
+  const nextSortOrder = Number.isInteger(sortOrder) ? sortOrder : await nextSortOrderForParent(parentId);
 
   const category = await prisma.category.create({
     data: {
       name,
       nameFr,
       slug: nextSlug,
-      parentId
+      parentId,
+      sortOrder: nextSortOrder
     }
   });
 
@@ -168,6 +189,12 @@ router.put('/:id', requireAdminPermission(ADMIN_PERMISSION.CATALOG), async (req,
     data.parentId = parsed.data.parentId;
   }
 
+  if (Number.isInteger(parsed.data.sortOrder)) {
+    data.sortOrder = parsed.data.sortOrder;
+  } else if (Object.prototype.hasOwnProperty.call(parsed.data, 'parentId') && parsed.data.parentId !== existing.parentId) {
+    data.sortOrder = await nextSortOrderForParent(parsed.data.parentId ?? null);
+  }
+
   if (parsed.data.slug || parsed.data.name) {
     data.slug = await uniqueSlug(prisma, 'category', parsed.data.slug || parsed.data.name, id);
   }
@@ -178,6 +205,55 @@ router.put('/:id', requireAdminPermission(ADMIN_PERMISSION.CATALOG), async (req,
 
   const updated = await prisma.category.update({ where: { id }, data });
   return res.json(updated);
+});
+
+router.post('/:id/reorder', requireAdminPermission(ADMIN_PERMISSION.CATALOG), async (req, res) => {
+  const id = Number(req.params.id);
+  const parsed = reorderSchema.safeParse(req.body);
+
+  if (!id || !parsed.success) {
+    return res.status(400).json({ message: 'Invalid payload', errors: parsed.success ? [] : parsed.error.issues });
+  }
+
+  const category = await prisma.category.findUnique({
+    where: { id },
+    select: { id: true, parentId: true, sortOrder: true }
+  });
+
+  if (!category) {
+    return res.status(404).json({ message: 'Category not found' });
+  }
+
+  const siblings = await prisma.category.findMany({
+    where: { parentId: category.parentId },
+    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+    select: { id: true, sortOrder: true }
+  });
+
+  const currentIndex = siblings.findIndex((item) => item.id === category.id);
+  if (currentIndex === -1) {
+    return res.status(404).json({ message: 'Category sibling group not found' });
+  }
+
+  const targetIndex = parsed.data.direction === 'previous' ? currentIndex - 1 : currentIndex + 1;
+  if (targetIndex < 0 || targetIndex >= siblings.length) {
+    return res.json({ moved: false, boundary: true });
+  }
+
+  const target = siblings[targetIndex];
+
+  await prisma.$transaction([
+    prisma.category.update({
+      where: { id: category.id },
+      data: { sortOrder: target.sortOrder }
+    }),
+    prisma.category.update({
+      where: { id: target.id },
+      data: { sortOrder: category.sortOrder }
+    })
+  ]);
+
+  return res.json({ moved: true });
 });
 
 router.post('/auto-translate', requireAdminPermission(ADMIN_PERMISSION.CATALOG), async (_req, res) => {

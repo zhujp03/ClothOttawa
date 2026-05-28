@@ -28,6 +28,7 @@ model Category {
   name      String
   nameFr    String?
   slug      String     @unique
+  sortOrder Int        @default(0)
   parentId  Int?
   parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
   children  Category[] @relation("CategoryTree")

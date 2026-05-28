@@ -98,13 +98,7 @@ function buildCategoryOptions(nodes, selectedValue = '', depth = 0) {
       const current = `<option value="${node.id}" ${
         String(selectedValue) === String(node.id) ? 'selected' : ''
       }>${indent}${node.name}</option>`;
-      const children = node.children?.length
-        ? buildCategoryOptions(
-            [...node.children].sort((a, b) => a.name.localeCompare(b.name)),
-            selectedValue,
-            depth + 1
-          )
-        : '';
+      const children = node.children?.length ? buildCategoryOptions(node.children, selectedValue, depth + 1) : '';
       return `${current}${children}`;
     })
     .join('');
@@ -234,17 +228,30 @@ async function loadAll() {
 function categoryTreeHtml(nodes, depth = 0) {
   return `<ul class="category-level depth-${depth}">
     ${nodes
-      .map(
-        (node) => `
+      .map((node, index) => {
+        const canMovePrevious = index > 0;
+        const canMoveNext = index < nodes.length - 1;
+        return `
       <li>
         <div class="category-node-row">
-          <div class="category-node-main"><span class="category-bullet">${depth === 0 ? '•' : '↳'}</span><span>${node.name}</span></div>
-          <button class="danger-ghost" type="button" data-delete-category="${node.id}">删除</button>
+          <div class="category-node-main">
+            <span class="category-bullet">${depth === 0 ? '•' : '↳'}</span>
+            <span>${node.name}</span>
+          </div>
+          <div class="category-node-actions">
+            <button class="ghost-btn" type="button" data-move-category="${node.id}" data-direction="previous" ${
+              canMovePrevious ? '' : 'disabled'
+            }>左移</button>
+            <button class="ghost-btn" type="button" data-move-category="${node.id}" data-direction="next" ${
+              canMoveNext ? '' : 'disabled'
+            }>右移</button>
+            <button class="danger-ghost" type="button" data-delete-category="${node.id}">删除</button>
+          </div>
         </div>
         ${node.children?.length ? categoryTreeHtml(node.children, depth + 1) : ''}
       </li>
-    `
-      )
+    `;
+      })
       .join('')}
   </ul>`;
 }
@@ -643,6 +650,7 @@ function render() {
         </form>
         <div class="panel panel-list">
           <h2>分类树</h2>
+          <p class="panel-note">在这里用“左移 / 右移”调整同级分类顺序。顶部导航会按这里的顺序从左到右显示。</p>
           <div class="category-tree">${categoryTreeHtml(tree)}</div>
         </div>
       </div>`
@@ -880,6 +888,26 @@ function bindEvents() {
         render();
       } catch (error) {
         setError(error.message || '删除分类失败');
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-move-category]').forEach((node) => {
+    node.addEventListener('click', async () => {
+      const id = Number(node.dataset.moveCategory || 0);
+      const direction = String(node.dataset.direction || '');
+      if (!id || !direction) return;
+      setError('');
+      try {
+        await request(`/api/categories/${id}/reorder`, {
+          method: 'POST',
+          headers: headers({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ direction })
+        });
+        await loadAll();
+        render();
+      } catch (error) {
+        setError(error.message || '调整分类顺序失败');
       }
     });
   });

@@ -49,18 +49,18 @@ async function main() {
   const existingCount = await prisma.category.count();
 
   if (existingCount === 0) {
-    const men = await prisma.category.create({ data: { name: 'Men', slug: 'men' } });
-    const women = await prisma.category.create({ data: { name: 'Women', slug: 'women' } });
-    const accessories = await prisma.category.create({ data: { name: 'Accessories', slug: 'accessories' } });
+    const men = await prisma.category.create({ data: { name: 'Men', slug: 'men', sortOrder: 0 } });
+    const women = await prisma.category.create({ data: { name: 'Women', slug: 'women', sortOrder: 1 } });
+    const accessories = await prisma.category.create({ data: { name: 'Accessories', slug: 'accessories', sortOrder: 2 } });
 
     await prisma.category.createMany({
       data: [
-        { name: 'Tops', slug: 'men-tops', parentId: men.id },
-        { name: 'Bottoms', slug: 'men-bottoms', parentId: men.id },
-        { name: 'Tops', slug: 'women-tops', parentId: women.id },
-        { name: 'Bottoms', slug: 'women-bottoms', parentId: women.id },
-        { name: 'Bags', slug: 'accessory-bags', parentId: accessories.id },
-        { name: 'Socks', slug: 'accessory-socks', parentId: accessories.id }
+        { name: 'Tops', slug: 'men-tops', parentId: men.id, sortOrder: 0 },
+        { name: 'Bottoms', slug: 'men-bottoms', parentId: men.id, sortOrder: 1 },
+        { name: 'Tops', slug: 'women-tops', parentId: women.id, sortOrder: 0 },
+        { name: 'Bottoms', slug: 'women-bottoms', parentId: women.id, sortOrder: 1 },
+        { name: 'Bags', slug: 'accessory-bags', parentId: accessories.id, sortOrder: 0 },
+        { name: 'Socks', slug: 'accessory-socks', parentId: accessories.id, sortOrder: 1 }
       ]
     });
   }
