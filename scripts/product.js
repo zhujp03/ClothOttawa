@@ -129,8 +129,7 @@ async function init() {
           ? `<p class="variant-status">${t('selected_variant', {
               color: selected.color,
               size: selected.size,
-              stock: selected.stock,
-              skuPart: selected.sku ? ` - SKU ${selected.sku}` : ''
+              stock: selected.stock
             })}</p>`
           : ''
       }

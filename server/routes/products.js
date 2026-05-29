@@ -195,6 +195,32 @@ function generateSku(productSlug, color, size) {
   return `NA-${prefix}-${colorCode}-${sizeCode}`.slice(0, 80);
 }
 
+async function generateUniqueSku(db, productSlug, color, size, takenSkus = new Set()) {
+  const baseSku = generateSku(productSlug, color, size);
+  let candidate = baseSku;
+  let suffix = 1;
+
+  while (takenSkus.has(candidate)) {
+    const tail = `-${suffix}`;
+    candidate = `${baseSku.slice(0, Math.max(1, 80 - tail.length))}${tail}`;
+    suffix += 1;
+  }
+
+  while (true) {
+    const existing = await db.productVariant.findFirst({
+      where: { sku: candidate },
+      select: { id: true }
+    });
+    if (!existing) {
+      takenSkus.add(candidate);
+      return candidate;
+    }
+    const tail = `-${suffix}`;
+    candidate = `${baseSku.slice(0, Math.max(1, 80 - tail.length))}${tail}`;
+    suffix += 1;
+  }
+}
+
 async function ensureProductFrenchFields({ name, description, existingNameFr = null, existingDescriptionFr = null }) {
   const out = {
     // Keep product names in original language for brand/style consistency.
@@ -438,36 +464,43 @@ router.post(
     return res.status(400).json({ message: 'At least one product image is required when creating a product' });
   }
 
-  const created = await prisma.product.create({
-    data: {
-      name: parsed.data.name,
-      nameFr: translated.nameFr,
-      slug: nextSlug,
-      description: parsed.data.description,
-      descriptionFr: translated.descriptionFr,
-      priceCents: parsed.data.priceCents,
-      costCents: Number(parsed.data.costCents || 0),
-      isOnSale: saleData.isOnSale,
-      salePriceCents: saleData.salePriceCents,
-      categoryId: parsed.data.categoryId,
-      isActive: normalizeBoolean(parsed.data.isActive, true),
-      imageUrl: gallery[0] || null,
-      imageUrlsJson: gallery.length ? JSON.stringify(gallery) : null,
-      introPdfUrl: uploaded.introPdfUrl,
-      variants: {
-        create:
-          parsed.data.variants?.map((variant) => ({
-            color: variant.color,
-            size: variant.size,
-            stock: variant.stock,
-            sku: generateSku(nextSlug, variant.color, variant.size)
-          })) || []
-      }
-    },
-    include: {
-      category: true,
-      variants: true
+  const created = await prisma.$transaction(async (tx) => {
+    const takenSkus = new Set();
+    const variantCreates = [];
+    for (const variant of parsed.data.variants || []) {
+      variantCreates.push({
+        color: variant.color,
+        size: variant.size,
+        stock: variant.stock,
+        sku: await generateUniqueSku(tx, nextSlug, variant.color, variant.size, takenSkus)
+      });
     }
+
+    return tx.product.create({
+      data: {
+        name: parsed.data.name,
+        nameFr: translated.nameFr,
+        slug: nextSlug,
+        description: parsed.data.description,
+        descriptionFr: translated.descriptionFr,
+        priceCents: parsed.data.priceCents,
+        costCents: Number(parsed.data.costCents || 0),
+        isOnSale: saleData.isOnSale,
+        salePriceCents: saleData.salePriceCents,
+        categoryId: parsed.data.categoryId,
+        isActive: normalizeBoolean(parsed.data.isActive, true),
+        imageUrl: gallery[0] || null,
+        imageUrlsJson: gallery.length ? JSON.stringify(gallery) : null,
+        introPdfUrl: uploaded.introPdfUrl,
+        variants: {
+          create: variantCreates
+        }
+      },
+      include: {
+        category: true,
+        variants: true
+      }
+    });
   });
 
     return res.status(201).json(created);
@@ -573,23 +606,29 @@ router.put(
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    let variantCreates = null;
     if (hasVariantsField && Array.isArray(parsed.data.variants)) {
       await tx.productVariant.deleteMany({ where: { productId: id } });
+      const takenSkus = new Set();
+      variantCreates = [];
+      for (const variant of parsed.data.variants) {
+        variantCreates.push({
+          color: variant.color,
+          size: variant.size,
+          stock: variant.stock,
+          sku: await generateUniqueSku(tx, data.slug || existing.slug, variant.color, variant.size, takenSkus)
+        });
+      }
     }
 
     return tx.product.update({
       where: { id },
       data: {
         ...data,
-        ...(hasVariantsField && Array.isArray(parsed.data.variants)
+        ...(Array.isArray(variantCreates)
           ? {
               variants: {
-                create: parsed.data.variants.map((variant) => ({
-                  color: variant.color,
-                  size: variant.size,
-                  stock: variant.stock,
-                  sku: generateSku(data.slug || existing.slug, variant.color, variant.size)
-                }))
+                create: variantCreates
               }
             }
           : {})

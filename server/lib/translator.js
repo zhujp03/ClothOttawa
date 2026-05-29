@@ -12,7 +12,7 @@ function truthy(value) {
 }
 
 function hasMyMemoryConfig() {
-  return truthy(process.env.MYMEMORY_TRANSLATE_ENABLED || 'true');
+  return truthy(process.env.MYMEMORY_TRANSLATE_ENABLED || 'false');
 }
 
 export function isMachineTranslationEnabled() {
@@ -43,29 +43,38 @@ function setCache(key, value) {
 async function translateWithGoogle(text, { target = 'fr', source = 'en' } = {}) {
   const key = process.env.GOOGLE_TRANSLATE_API_KEY;
   if (!key) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
 
-  const response = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${encodeURIComponent(key)}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      q: text,
-      source,
-      target,
-      format: 'text'
-    })
-  });
+  try {
+    const response = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        q: text,
+        source,
+        target,
+        format: 'text'
+      }),
+      signal: controller.signal
+    });
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) return null;
-  const value = data?.data?.translations?.[0]?.translatedText;
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return null;
+    const value = data?.data?.translations?.[0]?.translatedText;
+    return typeof value === 'string' && value.trim() ? value.trim() : null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function translateWithLibre(text, { target = 'fr', source = 'en' } = {}) {
   const url = process.env.LIBRETRANSLATE_URL;
   if (!url) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
 
   const payload = {
     q: text,
@@ -78,22 +87,29 @@ async function translateWithLibre(text, { target = 'fr', source = 'en' } = {}) {
     payload.api_key = process.env.LIBRETRANSLATE_API_KEY;
   }
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(payload)
-  });
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) return null;
-  const value = data?.translatedText;
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return null;
+    const value = data?.translatedText;
+    return typeof value === 'string' && value.trim() ? value.trim() : null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function translateWithMyMemory(text, { target = 'fr', source = 'en' } = {}) {
   if (!hasMyMemoryConfig()) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4000);
 
   const params = new URLSearchParams({
     q: text,
@@ -102,16 +118,21 @@ async function translateWithMyMemory(text, { target = 'fr', source = 'en' } = {}
   const email = String(process.env.MYMEMORY_CONTACT_EMAIL || '').trim();
   if (email) params.set('de', email);
 
-  const response = await fetch(`https://api.mymemory.translated.net/get?${params.toString()}`, {
-    method: 'GET'
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) return null;
+  try {
+    const response = await fetch(`https://api.mymemory.translated.net/get?${params.toString()}`, {
+      method: 'GET',
+      signal: controller.signal
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return null;
 
-  const value = data?.responseData?.translatedText;
-  if (typeof value !== 'string' || !value.trim()) return null;
-  if (/^quota exceeded$/i.test(value.trim())) return null;
-  return value.trim();
+    const value = data?.responseData?.translatedText;
+    if (typeof value !== 'string' || !value.trim()) return null;
+    if (/^quota exceeded$/i.test(value.trim())) return null;
+    return value.trim();
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function translateText(text, { target = 'fr', source = 'en' } = {}) {
