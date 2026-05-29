@@ -1521,8 +1521,10 @@ button:disabled {
 
 .product-image {
   aspect-ratio: 4 / 5;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   width: 100%;
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .product-body {
@@ -1636,6 +1638,7 @@ button:disabled {
 .pdp-carousel {
   position: relative;
   overflow: hidden;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .pdp-carousel-track {
@@ -1649,7 +1652,8 @@ button:disabled {
   min-width: 100%;
   width: 100%;
   aspect-ratio: 4 / 5;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   user-select: none;
   -webkit-user-drag: none;
   cursor: zoom-in;
