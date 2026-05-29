@@ -42,23 +42,27 @@ async function init() {
   const query = new URLSearchParams(location.search);
   const sort = query.get('sort') || 'latest';
   const search = query.get('search') || '';
+  const onSale = query.get('onSale') === '1' ? '1' : '0';
   const recentDays = Number.parseInt(query.get('recentDays') || '0', 10);
   const recentDaysQuery = Number.isFinite(recentDays) && recentDays > 0 ? `&recentDays=${recentDays}` : '';
   const searchQuery = search.trim() ? `&search=${encodeURIComponent(search.trim())}` : '';
+  const onSaleQuery = onSale === '1' ? '&onSale=1' : '';
   const data = await request(
-    `/api/products?limit=100&sort=${encodeURIComponent(sort)}${recentDaysQuery}${searchQuery}`
+    `/api/products?limit=100&sort=${encodeURIComponent(sort)}${recentDaysQuery}${searchQuery}${onSaleQuery}`
   ).catch(() => ({ items: [] }));
   const isNewCollection = Number.isFinite(recentDays) && recentDays > 0;
+  const isOnSaleCollection = onSale === '1';
   const searchOpen = Boolean(search.trim());
 
   app.innerHTML = `
     <section class="storefront-section">
       <div class="page-heading-row">
-        <p class="hero-kicker">${isNewCollection ? t('new_collection') : t('shop_all_kicker')}</p>
-        <h1>${isNewCollection ? t('shop_new') : t('all_products')}</h1>
+        <p class="hero-kicker">${isOnSaleCollection ? 'ON SALE' : isNewCollection ? t('new_collection') : t('shop_all_kicker')}</p>
+        <h1>${isOnSaleCollection ? t('shop_on_sale') : isNewCollection ? t('shop_new') : t('all_products')}</h1>
         <p>${t('products_available', { count: data.items.length })}</p>
       </div>
       <form class="shop-filters shop-filters-lite mobile-sort-search" method="get" id="shop-filter-form">
+        ${onSale === '1' ? '<input type="hidden" name="onSale" value="1" />' : ''}
         ${
           Number.isFinite(recentDays) && recentDays > 0
             ? `<input type="hidden" name="recentDays" value="${recentDays}" />`

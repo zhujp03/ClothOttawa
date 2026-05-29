@@ -40,6 +40,7 @@ const I18N = {
     cart_empty_title: 'Your cart is empty',
     cart_empty_desc: 'Add products to start checkout.',
     cart_shop_all: 'Shop All',
+    shop_on_sale: 'Shop On Sale',
     cart_each: 'each',
     cart_remove: 'Remove',
     cart_subtotal: 'Subtotal',
@@ -264,6 +265,7 @@ const I18N = {
     cart_empty_title: 'Votre panier est vide',
     cart_empty_desc: "Ajoutez des produits pour commencer le paiement.",
     cart_shop_all: 'Tout magasiner',
+    shop_on_sale: 'Magasiner en solde',
     cart_each: 'chacun',
     cart_remove: 'Retirer',
     cart_subtotal: 'Sous-total',
@@ -903,6 +905,9 @@ function buildMobileMenuGroups(categories = []) {
     <div class="mobile-nav-group">
       <a href="/shop" class="mobile-nav-parent">${t('cart_shop_all')}</a>
     </div>
+    <div class="mobile-nav-group">
+      <a href="/shop?onSale=1&sort=price_desc" class="mobile-nav-parent">${t('shop_on_sale')}</a>
+    </div>
     ${groupsHtml}
   `;
 }
@@ -1532,6 +1537,7 @@ export async function renderHeader() {
         <a href="/" class="brand-link desktop-brand">LUXURY STATION</a>
         <nav class="mega-nav desktop-nav" aria-label="${t('header_main_categories')}">
           <div class="nav-group"><a href="/shop" class="nav-parent">${t('cart_shop_all')}</a></div>
+          <div class="nav-group"><a href="/shop?onSale=1&sort=price_desc" class="nav-parent">${t('shop_on_sale')}</a></div>
           ${categories.map(buildNavGroup).join('')}
         </nav>
         <div class="header-actions desktop-actions">

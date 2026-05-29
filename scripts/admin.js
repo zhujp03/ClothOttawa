@@ -929,7 +929,7 @@ function render() {
         </div>
         <div class="table-scroll">
           <table class="product-table">
-            <thead><tr><th>图</th><th>名称</th><th>分类</th><th>价格</th><th>成本价</th><th>促销</th><th>状态</th><th>总库存</th><th>SKU 示例</th><th>操作</th></tr></thead>
+            <thead><tr><th>图</th><th>名称</th><th>分类</th><th>价格</th><th>成本价</th><th>促销</th><th>状态</th><th>首页主推</th><th>总库存</th><th>SKU 示例</th><th>操作</th></tr></thead>
             <tbody>
               ${state.products
                 .map((product) => {
@@ -967,9 +967,20 @@ function render() {
                         <option value="false" ${product.isActive ? '' : 'selected'}>下架</option>
                       </select>
                     </td>
+                    <td>
+                      <div>${product.isHomeFeatured ? '当前显示' : '未设置'}</div>
+                      <div class="table-subline">${
+                        product.isActive ? '可设为 Just Landed' : '下架商品不可主推'
+                      }</div>
+                    </td>
                     <td>${totalStock}</td>
                     <td>${skuExample}</td>
                     <td class="action-cell">
+                      <div class="action-row">
+                        <button type="button" class="ghost-btn" data-set-home-feature="${product.id}" ${
+                          product.isActive ? '' : 'disabled'
+                        }>${product.isHomeFeatured ? '取消主推' : '设为主推'}</button>
+                      </div>
                       <div class="action-row">
                         <button type="button" class="ghost-btn" data-edit-product="${product.id}">编辑</button>
                         <button type="button" class="danger-ghost" data-delete-product="${product.id}">删除</button>
@@ -1318,6 +1329,27 @@ function bindEvents() {
         render();
       } catch (error) {
         setError(error.message || '更新促销状态失败');
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-set-home-feature]').forEach((node) => {
+    node.addEventListener('click', async () => {
+      const id = Number(node.dataset.setHomeFeature || 0);
+      if (!id) return;
+      const product = state.products.find((item) => Number(item.id) === id);
+      if (!product) return;
+      const next = !Boolean(product.isHomeFeatured);
+      try {
+        await request(`/api/products/${id}/home-feature`, {
+          method: 'PATCH',
+          headers: headers({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ isHomeFeatured: next })
+        });
+        await loadAll();
+        render();
+      } catch (error) {
+        setError(error.message || '更新首页主推失败');
       }
     });
   });

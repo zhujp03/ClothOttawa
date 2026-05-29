@@ -40,14 +40,16 @@ async function init() {
   if (!root) return;
   const { customer } = getCustomerSession();
 
-  const [{ items: newItems }, { items: trendingItems }, { items: topRatedItems }, categoryTree] = await Promise.all([
-    request('/api/products?limit=100&sort=price_desc&recentDays=30').catch(() => ({ items: [] })),
+  const [{ items: featuredItems }, { items: newItems }, { items: trendingItems }, { items: topRatedItems }, categoryTree] = await Promise.all([
+    request('/api/products?featuredHome=1&limit=1&sort=latest').catch(() => ({ items: [] })),
+    // "Just landed" should reflect newest products, not the most expensive ones.
+    request('/api/products?limit=100&sort=latest&recentDays=30').catch(() => ({ items: [] })),
     request('/api/products?limit=4&onSale=1&sort=price_desc').catch(() => ({ items: [] })),
     request('/api/products?sort=price_desc&limit=2').catch(() => ({ items: [] })),
     request('/api/categories?tree=1').catch(() => [])
   ]);
 
-  const featured = Array.isArray(newItems) ? newItems[0] : null;
+  const featured = (Array.isArray(featuredItems) && featuredItems[0]) || (Array.isArray(newItems) ? newItems[0] : null);
   const topRated = Array.isArray(topRatedItems) ? topRatedItems.slice(0, 2) : [];
   const trending = (Array.isArray(trendingItems) ? trendingItems : []).slice(0, 4);
 
@@ -83,6 +85,7 @@ async function init() {
       }
       <section class="home-root-nav">
         <a href="/shop" class="home-root-pill">${t('cart_shop_all')}</a>
+        <a href="/shop?onSale=1&sort=price_desc" class="home-root-pill">${t('shop_on_sale')}</a>
         ${categoryTree.map((category) => `<a href="/category/${category.slug}" class="home-root-pill">${category.name}</a>`).join('')}
       </section>
       <section class="home-products-section">

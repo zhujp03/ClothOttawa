@@ -53,6 +53,7 @@ model Product {
   imageUrl    String?
   imageUrlsJson String?
   introPdfUrl String?
+  isHomeFeatured Boolean       @default(false)
   isActive    Boolean          @default(true)
   categoryId  Int
   category    Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)

@@ -35,6 +35,9 @@ const productSchema = z.object({
 const visibilitySchema = z.object({
   isActive: z.union([z.boolean(), z.string()])
 });
+const homeFeatureSchema = z.object({
+  isHomeFeatured: z.union([z.boolean(), z.string()])
+});
 
 function normalizeBoolean(value, fallback = true) {
   if (typeof value === 'boolean') {
@@ -271,6 +274,7 @@ router.get('/', async (req, res) => {
     categoryId,
     search,
     sku,
+    featuredHome = '0',
     onSale = '0',
     sort = 'latest',
     recentDays = '0',
@@ -312,6 +316,10 @@ router.get('/', async (req, res) => {
         }
       }
     };
+  }
+
+  if (String(featuredHome) === '1') {
+    where.isHomeFeatured = true;
   }
 
   const days = Number.parseInt(String(recentDays || '0'), 10);
@@ -537,6 +545,7 @@ router.put(
   }
   if (Object.prototype.hasOwnProperty.call(parsed.data, 'isActive')) {
     data.isActive = normalizeBoolean(parsed.data.isActive, existing.isActive);
+    if (!data.isActive) data.isHomeFeatured = false;
   }
 
   if (parsed.data.slug || parsed.data.name) {
@@ -622,15 +631,58 @@ router.patch('/:id/visibility', requireAdminPermission(ADMIN_PERMISSION.CATALOG)
     return res.status(404).json({ message: 'Product not found' });
   }
 
+  const nextIsActive = normalizeBoolean(parsed.data.isActive, existing.isActive);
   const updated = await prisma.product.update({
     where: { id },
     data: {
-      isActive: normalizeBoolean(parsed.data.isActive, existing.isActive)
+      isActive: nextIsActive,
+      ...(nextIsActive ? {} : { isHomeFeatured: false })
     },
     include: {
       category: true,
       variants: true
     }
+  });
+
+  return res.json(updated);
+});
+
+router.patch('/:id/home-feature', requireAdminPermission(ADMIN_PERMISSION.CATALOG), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) {
+    return res.status(400).json({ message: 'Invalid product id' });
+  }
+
+  const parsed = homeFeatureSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Invalid payload', errors: parsed.error.issues });
+  }
+
+  const existing = await prisma.product.findUnique({ where: { id } });
+  if (!existing) {
+    return res.status(404).json({ message: 'Product not found' });
+  }
+
+  const nextFeatured = normalizeBoolean(parsed.data.isHomeFeatured, false);
+  if (nextFeatured && existing.isActive === false) {
+    return res.status(400).json({ message: 'Cannot feature an inactive product' });
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    if (nextFeatured) {
+      await tx.product.updateMany({
+        where: { isHomeFeatured: true },
+        data: { isHomeFeatured: false }
+      });
+    }
+    return tx.product.update({
+      where: { id },
+      data: { isHomeFeatured: nextFeatured },
+      include: {
+        category: true,
+        variants: true
+      }
+    });
   });
 
   return res.json(updated);
