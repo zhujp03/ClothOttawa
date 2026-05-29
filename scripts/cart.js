@@ -7,12 +7,18 @@ import {
   setCartItemSelected,
   clearCart,
   cartSummary,
+  FREE_SHIPPING_THRESHOLD_CENTS,
+  STANDARD_SHIPPING_FEE_CENTS,
   formatPrice,
   publicImageUrl,
   makeLineKey,
   refreshCartPricing,
   t
 } from './common.js';
+
+function shippingFeeCents(subtotalCents) {
+  return Number(subtotalCents || 0) >= FREE_SHIPPING_THRESHOLD_CENTS ? 0 : STANDARD_SHIPPING_FEE_CENTS;
+}
 
 async function init() {
   await renderHeader();
@@ -24,6 +30,8 @@ async function init() {
     const items = getCartItems();
     const checkoutItems = getCheckoutItems(items);
     const summary = cartSummary(checkoutItems);
+    const shippingCents = shippingFeeCents(summary.subtotalCents);
+    const orderTotalCents = Number(summary.subtotalCents || 0) + shippingCents;
     const hasDiscontinued = items.some((item) => item.isActive === false);
     const hasNoSelected = checkoutItems.length === 0;
 
@@ -84,8 +92,13 @@ async function init() {
           <aside class="card-like cart-summary">
             <h2>${t('order_summary')}</h2>
             <div class="summary-row"><span>${t('checkout_selected_subtotal')}</span><strong>${formatPrice(summary.subtotalCents)}</strong></div>
-            <div class="summary-row"><span>${t('shipping')}</span><span>${t('calculated_checkout')}</span></div>
-            <div class="summary-row total"><span>${t('total')}</span><strong>${formatPrice(summary.subtotalCents)}</strong></div>
+            <div class="summary-row"><span>${t('shipping')}</span><span>${
+              shippingCents > 0 ? formatPrice(shippingCents) : t('free_shipping')
+            }</span></div>
+            <p class="checkout-subline">${
+              shippingCents > 0 ? t('shipping_fee_applied') : t('shipping_free_threshold')
+            }</p>
+            <div class="summary-row total"><span>${t('total')}</span><strong>${formatPrice(orderTotalCents)}</strong></div>
             ${hasDiscontinued ? `<p class="admin-error">${t('checkout_blocked_discontinued')}</p>` : ''}
             ${hasNoSelected ? `<p class="admin-error">${t('checkout_none_selected')}</p>` : ''}
             <a href="/checkout" class="cta-button checkout-btn ${hasDiscontinued || hasNoSelected ? 'is-disabled' : ''}" data-checkout-guard="${

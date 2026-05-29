@@ -23,6 +23,8 @@ import { ADMIN_PERMISSION } from '../lib/admin-permissions.js';
 import { calculateTaxQuote, resolveCountryRegion } from '../lib/tax.js';
 
 const router = Router();
+const FREE_SHIPPING_THRESHOLD_CENTS = 35000;
+const STANDARD_SHIPPING_FEE_CENTS = 1900;
 
 const orderItemSchema = z.object({
   productId: z.coerce.number().int().positive(),
@@ -140,6 +142,10 @@ function getPaymentIdFromSquareOrder(squareOrder) {
   return tender?.payment_id || tender?.id || '';
 }
 
+function shippingFeeCents(subtotalCents) {
+  return Number(subtotalCents || 0) >= FREE_SHIPPING_THRESHOLD_CENTS ? 0 : STANDARD_SHIPPING_FEE_CENTS;
+}
+
 function sessionPayload(session) {
   const subtotalCents = Number(session.subtotalCents || 0);
   const taxQuote = calculateTaxQuote({
@@ -148,6 +154,7 @@ function sessionPayload(session) {
     subtotalCents
   });
   const taxCents = Number(taxQuote.taxCents || 0);
+  const shippingCents = shippingFeeCents(subtotalCents);
   const etransferVerificationCents = Number(session.etransferVerificationCents || 0);
   const etransferRecipient = String(process.env.ETRANSFER_RECEIVER_EMAIL || '').trim();
   return {
@@ -156,6 +163,7 @@ function sessionPayload(session) {
     paymentMethod: session.paymentMethod,
     subtotalCents,
     taxCents,
+    shippingCents,
     taxQuote,
     totalCents: session.totalCents,
     currency: session.currency,

@@ -3,6 +3,8 @@ import { prisma } from './prisma.js';
 import { calculateTaxQuote } from './tax.js';
 
 const HOLD_MINUTES = 15;
+const FREE_SHIPPING_THRESHOLD_CENTS = 35000;
+const STANDARD_SHIPPING_FEE_CENTS = 1900;
 
 export class PaymentSessionError extends Error {
   constructor(status, message) {
@@ -23,6 +25,10 @@ function effectiveProductPriceCents(product) {
     return salePrice;
   }
   return basePrice;
+}
+
+function shippingFeeCents(subtotalCents) {
+  return Number(subtotalCents || 0) >= FREE_SHIPPING_THRESHOLD_CENTS ? 0 : STANDARD_SHIPPING_FEE_CENTS;
 }
 
 async function allocateEtransferVerificationCents(tx, subtotalCents) {
@@ -197,6 +203,7 @@ export async function createPaymentSession({
       subtotalCents
     });
     const taxCents = Number(taxQuote.taxCents || 0);
+    const shippingCents = shippingFeeCents(subtotalCents);
     const etransferVerificationCents =
       paymentMethod === 'ETRANSFER' ? await allocateEtransferVerificationCents(tx, subtotalCents) : 0;
     if (paymentMethod === 'ETRANSFER' && etransferVerificationCents == null) {
@@ -205,7 +212,7 @@ export async function createPaymentSession({
         'Too many pending e-transfer sessions for the same amount. Please wait a minute and try again.'
       );
     }
-    const totalCents = subtotalCents + taxCents + etransferVerificationCents;
+    const totalCents = subtotalCents + shippingCents + taxCents + etransferVerificationCents;
     const token = crypto.randomUUID();
     return tx.paymentSession.create({
       data: {

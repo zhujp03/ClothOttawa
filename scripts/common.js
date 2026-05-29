@@ -1,4 +1,6 @@
 export const API_BASE = '';
+export const FREE_SHIPPING_THRESHOLD_CENTS = 35000;
+export const STANDARD_SHIPPING_FEE_CENTS = 1900;
 const AUTH_STORAGE_KEY = 'nimbus_customer_auth_v1';
 const ADMIN_STORAGE_KEY = 'admin_token';
 const CART_STORAGE_PREFIX = 'nimbus-athletica-cart-v2';
@@ -46,6 +48,10 @@ const I18N = {
     cart_subtotal: 'Subtotal',
     subtotal: 'Subtotal',
     estimated_tax: 'Estimated Tax',
+    shipping_fee: 'Shipping fee',
+    free_shipping: 'Free shipping',
+    shipping_fee_applied: 'CA$19 shipping applies under CA$350',
+    shipping_free_threshold: 'Free shipping on CA$350+',
     square_fee_label: 'Square fee (3%)',
     estimated_total: 'Estimated Total',
     cart_clear: 'Clear Cart',
@@ -73,7 +79,7 @@ const I18N = {
     category_kicker: 'CATEGORY',
     category_not_found: 'Category not found',
     back_home: 'Back to home',
-    member_access_banner: 'Free shipping over CA$99 and early drops this week.',
+    member_access_banner: 'Free shipping on CA$350+ and early drops this week.',
     just_landed: 'JUST LANDED',
     shop_featured: 'Shop Featured',
     shop_new: 'Shop New',
@@ -271,6 +277,10 @@ const I18N = {
     cart_subtotal: 'Sous-total',
     subtotal: 'Sous-total',
     estimated_tax: 'Taxe estimée',
+    shipping_fee: 'Frais de livraison',
+    free_shipping: 'Livraison gratuite',
+    shipping_fee_applied: 'Frais de livraison de 19 $CA sous 350 $CA',
+    shipping_free_threshold: 'Livraison gratuite à partir de 350 $CA',
     square_fee_label: 'Frais Square (3 %)',
     estimated_total: 'Total estimé',
     cart_clear: 'Vider le panier',
@@ -298,7 +308,7 @@ const I18N = {
     category_kicker: 'CATÉGORIE',
     category_not_found: 'Catégorie introuvable',
     back_home: "Retour à l'accueil",
-    member_access_banner: 'Livraison gratuite dès 99 $CA et nouveautés anticipées cette semaine.',
+    member_access_banner: 'Livraison gratuite dès 350 $CA et nouveautés anticipées cette semaine.',
     just_landed: "NOUVEAUTÉS",
     shop_featured: "Magasiner l'article vedette",
     shop_new: 'Magasiner les nouveautés',

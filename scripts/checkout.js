@@ -6,10 +6,16 @@ import {
   refreshCartPricing,
   cartSummary,
   clearCart,
+  FREE_SHIPPING_THRESHOLD_CENTS,
+  STANDARD_SHIPPING_FEE_CENTS,
   request,
   formatPrice,
   t
 } from './common.js';
+
+function shippingFeeCents(subtotalCents) {
+  return Number(subtotalCents || 0) >= FREE_SHIPPING_THRESHOLD_CENTS ? 0 : STANDARD_SHIPPING_FEE_CENTS;
+}
 
 function shippingFromCustomer(customer) {
   return {
@@ -33,7 +39,8 @@ function formatRatePct(value) {
 
 function orderSummaryHtml(items, summary, quote) {
   const taxCents = Number(quote?.taxCents || 0);
-  const estimatedTotal = Number(summary.subtotalCents || 0) + taxCents;
+  const shippingCents = Number(quote?.shippingCents ?? shippingFeeCents(summary.subtotalCents));
+  const estimatedTotal = Number(summary.subtotalCents || 0) + taxCents + shippingCents;
   const ratePct = formatRatePct(quote?.effectiveRatePct ?? 0);
   return `
     <aside class="card-like cart-summary">
@@ -47,6 +54,12 @@ function orderSummaryHtml(items, summary, quote) {
           .join('')}
       </div>
       <div class="summary-row"><span>${t('subtotal')}</span><strong>${formatPrice(summary.subtotalCents)}</strong></div>
+      <div class="summary-row"><span>${t('shipping_fee')}</span><strong>${
+        shippingCents > 0 ? formatPrice(shippingCents) : t('free_shipping')
+      }</strong></div>
+      <p class="checkout-subline">${
+        shippingCents > 0 ? t('shipping_fee_applied') : t('shipping_free_threshold')
+      }</p>
       <div class="summary-row"><span>Tax (${ratePct}%)</span><strong>${formatPrice(taxCents)}</strong></div>
       <div class="summary-row total"><span>${t('estimated_total')}</span><strong>${formatPrice(estimatedTotal)}</strong></div>
     </aside>
@@ -256,7 +269,7 @@ async function renderCheckoutFormMode(root, token, customer) {
       })
     });
   } catch {
-    taxQuote = { taxCents: 0 };
+    taxQuote = { taxCents: 0, shippingCents: shippingFeeCents(summary.subtotalCents) };
   }
 
   root.innerHTML = `
